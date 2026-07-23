@@ -42,6 +42,7 @@ typedef enum ptcl_token_type
     ptcl_token_and_type,
     ptcl_token_or_type,
     ptcl_token_const_type,
+    ptcl_token_do_type,
     ptcl_token_hashtag_type,
     ptcl_token_left_par_type,
     ptcl_token_right_par_type,
@@ -65,7 +66,9 @@ typedef enum ptcl_token_type
     ptcl_token_at_type,
     ptcl_token_elipsis_type,
     ptcl_token_tilde_type,
-    ptcl_token_caret_type
+    ptcl_token_caret_type,
+    ptcl_token_provider_type,
+    ptcl_token_generator_type
 } ptcl_token_type;
 
 typedef struct ptcl_location

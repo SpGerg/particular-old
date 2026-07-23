@@ -114,7 +114,8 @@ typedef struct ptcl_parser_function ptcl_parser_function;
 
 typedef struct ptcl_parser_variable
 {
-    ptcl_name name;
+    ptcl_name identifier;
+    ptrdiff_t provider_index;
     ptcl_func_body *root;
     ptcl_type type;
     ptcl_expression *built_in;
@@ -131,6 +132,8 @@ typedef struct ptcl_parser_variable
 typedef struct ptcl_parser_typedata
 {
     ptcl_func_body *root;
+    ptcl_name identifier;
+    ptrdiff_t provider_index;
     ptcl_type_typedata *typedata;
     bool is_out_of_scope;
 } ptcl_parser_typedata;
@@ -138,6 +141,7 @@ typedef struct ptcl_parser_typedata
 typedef struct ptcl_parser_comp_type
 {
     ptcl_name identifier;
+    ptrdiff_t provider_index;
     ptcl_func_body *root;
     ptcl_type_comp_type *comp_type;
     ptcl_type_comp_type *static_type;
@@ -219,13 +223,38 @@ typedef ptcl_expression *(*ptcl_built_in_function_t)(
 
 typedef struct ptcl_parser_function
 {
-    ptcl_name name;
+    ptcl_name identifier;
+    ptrdiff_t provider_index;
     ptcl_func_body *root;
     bool is_built_in;
     ptcl_built_in_function_t bind;
     ptcl_statement_func_decl func;
     bool is_out_of_scope;
 } ptcl_parser_function;
+
+typedef struct ptcl_parser_provider_variant
+{
+    ptcl_expression **values;
+    size_t capacity;
+    size_t count;
+    ptrdiff_t member;
+} ptcl_parser_provider_variant;
+
+typedef struct ptcl_parser_provider
+{
+    ptcl_statement_type type;
+    ptcl_attributes attributes;
+    ptcl_statement_modifiers modifiers;
+    ptcl_name name;
+    ptcl_func_body *root;
+    ptcl_statement_func_decl func_decl;
+    ptcl_parser_provider_variant *variants;
+    size_t variants_capacity;
+    size_t variants_count;
+    size_t index;
+    bool is_provider;
+    bool is_out_of_scope;
+} ptcl_parser_provider;
 
 typedef enum ptcl_parser_instance_type
 {
@@ -256,6 +285,8 @@ typedef struct ptcl_parser_result
     size_t lated_states_count;
     ptcl_parser_this_s_pair *this_pairs;
     size_t this_pairs_count;
+    ptcl_parser_provider *providers;
+    size_t providers_count;
     bool is_critical;
 } ptcl_parser_result;
 
@@ -266,6 +297,15 @@ typedef struct ptcl_parser_statement_info
     ptcl_expression *expression;
     ptcl_statement_modifiers modifiers;
 } ptcl_parser_statement_info;
+
+typedef struct ptcl_parser_assign_dot_data
+{
+    bool *is_provider;
+    ptcl_identifier *identifier;
+    ptcl_argument *typedata_member;
+    ptcl_expression *ctor;
+    size_t ctor_member_index;
+} ptcl_parser_assign_dot_data;
 
 // TODO: expression -> expr with all other stuff with that
 typedef enum ptcl_parser_expression_flags
@@ -382,21 +422,32 @@ static ptcl_parser_this_s_pair ptcl_parser_this_s_pair_create(ptcl_func_body *bo
         .index = index};
 }
 
+static ptcl_parser_comp_type ptcl_parser_comp_type_create_provider(ptcl_func_body *root, ptcl_name identifier, ptrdiff_t index)
+{
+    return (ptcl_parser_comp_type){
+        .root = root,
+        .identifier = identifier,
+        .provider_index = (int)index,
+        .is_out_of_scope = false};
+}
+
 static ptcl_parser_comp_type ptcl_parser_comp_type_create(ptcl_func_body *root, ptcl_name identifier, ptcl_type_comp_type *type, bool is_static, bool is_auto_static)
 {
     return (ptcl_parser_comp_type){
         .root = root,
         .identifier = identifier,
+        .provider_index = -1,
         .static_type = is_static ? type : NULL,
         .comp_type = is_static ? NULL : type,
         .is_auto_static = is_auto_static,
         .is_out_of_scope = false};
 }
 
-static ptcl_parser_variable ptcl_parser_variable_create(ptcl_name name, ptcl_type type, ptcl_expression *built_in, bool is_built_in, ptcl_func_body *root)
+static ptcl_parser_variable ptcl_parser_variable_create(ptcl_name identifier, ptcl_type type, ptcl_expression *built_in, bool is_built_in, ptcl_func_body *root)
 {
     return (ptcl_parser_variable){
-        .name = name,
+        .identifier = identifier,
+        .provider_index = -1,
         .root = root,
         .is_out_of_scope = false,
         .type = type,
@@ -409,11 +460,28 @@ static ptcl_parser_variable ptcl_parser_variable_create(ptcl_name name, ptcl_typ
         .is_used = false};
 }
 
-// TODO: more cool name
-static ptcl_parser_variable ptcl_parser_variable_not_static_create(ptcl_name name, ptcl_type type, ptcl_expression *built_in, bool is_built_in, ptcl_func_body *root)
+static ptcl_parser_variable ptcl_parser_variable_create_provider(ptcl_func_body *root, ptcl_name identifier, ptrdiff_t index)
 {
     return (ptcl_parser_variable){
-        .name = name,
+        .identifier = identifier,
+        .provider_index = index,
+        .root = root,
+        .is_out_of_scope = false,
+        .built_in = NULL,
+        .is_built_in = false,
+        .is_syntax_word = false,
+        .is_function_pointer = false,
+        .is_syntax_variable = false,
+        .is_syntax_anonymous = false,
+        .is_used = false};
+}
+
+// TODO: more cool name
+static ptcl_parser_variable ptcl_parser_variable_not_static_create(ptcl_name identifier, ptcl_type type, ptcl_expression *built_in, bool is_built_in, ptcl_func_body *root)
+{
+    return (ptcl_parser_variable){
+        .identifier = identifier,
+        .provider_index = -1,
         .root = root,
         .is_out_of_scope = false,
         .type = type,
@@ -426,10 +494,11 @@ static ptcl_parser_variable ptcl_parser_variable_not_static_create(ptcl_name nam
         .is_used = false};
 }
 
-static ptcl_parser_variable ptcl_parser_func_variable_create(ptcl_name name, ptcl_type type, ptcl_func_body *root)
+static ptcl_parser_variable ptcl_parser_func_variable_create(ptcl_name identifier, ptcl_type type, ptcl_func_body *root)
 {
     return (ptcl_parser_variable){
-        .name = name,
+        .identifier = identifier,
+        .provider_index = -1,
         .root = root,
         .is_out_of_scope = false,
         .type = type,
@@ -441,26 +510,38 @@ static ptcl_parser_variable ptcl_parser_func_variable_create(ptcl_name name, ptc
         .is_used = false};
 }
 
+static ptcl_parser_function ptcl_parser_function_create_provider(ptcl_func_body *root, ptcl_name identifier, ptrdiff_t index)
+{
+    return (ptcl_parser_function){
+        .identifier = identifier,
+        .provider_index = (int)index,
+        .root = root,
+        .is_out_of_scope = false,
+        .is_built_in = false};
+};
+
 static ptcl_parser_function ptcl_parser_function_create(ptcl_func_body *root, ptcl_statement_func_decl func)
 {
     return (ptcl_parser_function){
-        .name = func.name,
+        .identifier = func.identifier,
+        .provider_index = -1,
         .root = root,
         .is_out_of_scope = false,
         .is_built_in = false,
         .func = func};
 };
 
-static ptcl_parser_function ptcl_parser_built_in_create(ptcl_func_body *root, ptcl_name name, ptcl_built_in_function_t bind, ptcl_argument *arguments, size_t count, ptcl_type return_type)
+static ptcl_parser_function ptcl_parser_built_in_create(ptcl_func_body *root, ptcl_name identifier, ptcl_built_in_function_t bind, ptcl_argument *arguments, size_t count, ptcl_type return_type)
 {
     return (ptcl_parser_function){
-        .name = name,
+        .identifier = identifier,
+        .provider_index = -1,
         .root = root,
         .is_out_of_scope = false,
         .is_built_in = true,
         .bind = bind,
         .func = (ptcl_statement_func_decl){
-            .name = name,
+            .identifier = identifier,
             .arguments = arguments,
             .count = count,
             .return_type = return_type}};
@@ -470,7 +551,45 @@ static ptcl_parser_typedata ptcl_parser_typedata_create(ptcl_func_body *root, pt
 {
     return (ptcl_parser_typedata){
         .root = root,
+        .identifier = typedata->identifier,
         .typedata = typedata,
+        .provider_index = -1,
+        .is_out_of_scope = false};
+}
+
+static ptcl_parser_typedata ptcl_parser_typedata_create_provider(ptcl_func_body *root, ptcl_name identifier, ptrdiff_t index)
+{
+    return (ptcl_parser_typedata){
+        .root = root,
+        .identifier = identifier,
+        .provider_index = index,
+        .is_out_of_scope = false};
+}
+
+static ptcl_parser_provider ptcl_parser_provider_create(
+    ptcl_statement_type type,
+    ptcl_attributes attributes,
+    ptcl_statement_modifiers modifiers,
+    ptcl_name name,
+    ptcl_func_body *root,
+    ptcl_argument *arguments,
+    size_t arguments_count,
+    bool has_variadic,
+    size_t index,
+    bool is_provider)
+{
+    return (ptcl_parser_provider){
+        .type = type,
+        .modifiers = modifiers,
+        .attributes = attributes,
+        .name = name,
+        .root = root,
+        .func_decl = ptcl_statement_func_decl_create(ptcl_statement_modifiers_none_flag, root, name, arguments, arguments_count, NULL, ptcl_type_any, has_variadic, false),
+        .variants = NULL,
+        .variants_capacity = 0,
+        .variants_count = 0,
+        .index = index,
+        .is_provider = is_provider,
         .is_out_of_scope = false};
 }
 
@@ -529,6 +648,66 @@ static ptcl_parser_syntax_node ptcl_parser_syntax_node_create_value(ptcl_express
         .value.state = state};
 }
 
+static ptcl_parser_provider_variant ptcl_parser_provider_variant_create(ptcl_expression **values, size_t count, ptrdiff_t member)
+{
+    return (ptcl_parser_provider_variant){
+        .values = values,
+        .count = count,
+        .member = member};
+}
+
+static bool ptcl_parser_provider_add_variant(ptcl_parser_provider *provider, ptcl_parser_provider_variant variant)
+{
+    if (provider->variants_count >= provider->variants_capacity)
+    {
+        if (provider->variants_count == 0)
+        {
+            provider->variants_capacity = 1;
+        }
+
+        provider->variants_capacity *= 2;
+        ptcl_parser_provider_variant *buffer = realloc(provider->variants, provider->variants_capacity * sizeof(ptcl_parser_provider_variant));
+        if (buffer == NULL)
+        {
+            return false;
+        }
+
+        provider->variants = buffer;
+    }
+
+    provider->variants[provider->variants_count++] = variant;
+    return true;
+}
+
+static void ptcl_parser_provider_variant_destroy(ptcl_parser_provider_variant variant)
+{
+    for (size_t i = 0; i < variant.count; i++)
+    {
+        ptcl_expression_destroy(variant.values[i]);
+    }
+
+    free(variant.values);
+}
+
+static void ptcl_parser_provider_destroy(ptcl_parser_provider provider)
+{
+    ptcl_name_destroy(provider.name);
+    ptcl_attributes_destroy(provider.attributes);
+    // TODO: make func for func decl and this
+    for (size_t i = 0; i < provider.func_decl.count; i++)
+    {
+        ptcl_argument_destroy(provider.func_decl.arguments[i]);
+    }
+
+    free(provider.func_decl.arguments);
+    for (size_t i = 0; i < provider.variants_count; i++)
+    {
+        ptcl_parser_provider_variant_destroy(provider.variants[i]);
+    }
+
+    free(provider.variants);
+}
+
 static void ptcl_parser_syntax_node_destroy(ptcl_parser_syntax_node node)
 {
     switch (node.type)
@@ -546,6 +725,10 @@ static void ptcl_parser_syntax_node_destroy(ptcl_parser_syntax_node node)
         ptcl_name_destroy(node.word.name);
         break;
     }
+}
+
+static void ptcl_parser_function_destroy(ptcl_parser_function function)
+{
 }
 
 static void ptcl_parser_typedata_destroy(ptcl_parser_typedata typedata)
@@ -586,6 +769,14 @@ static void ptcl_parser_variable_destroy(ptcl_parser_variable variable)
     }
 }
 
+static void ptcl_parser_tokens_state_destroy(ptcl_parser_tokens_state state)
+{
+    if (state.is_free)
+    {
+        free(state.tokens);
+    }
+}
+
 static void ptcl_parser_comp_type_destroy(ptcl_parser_comp_type comp_type)
 {
     free(comp_type.comp_type);
@@ -613,13 +804,34 @@ void ptcl_parser_leave_from_insert_state(ptcl_parser *parser);
 
 ptcl_statement_func_call ptcl_parser_func_call(ptcl_parser *parser, ptcl_parser_function *function, ptcl_expression *self, bool is_expression);
 
-ptcl_statement_func_decl ptcl_parser_func_decl(ptcl_parser *parser, ptcl_statement_modifiers modifiers);
+bool ptcl_parser_func_name(ptcl_parser *parser, ptcl_name *name, bool *is_provider, bool *is_constructor, ptcl_parser_function **prototype, ptcl_attributes attributes, ptcl_statement_modifiers modifiers);
 
-ptcl_statement_typedata_decl ptcl_parser_typedata_decl(ptcl_parser *parser, ptcl_statement_modifiers modifiers);
+bool ptcl_parser_func_body_and_storage(ptcl_parser *parser, ptcl_name name, ptcl_statement_func_decl *decl, ptcl_parser_function *prototype, bool is_constructor, ptcl_statement_modifiers modifiers);
 
-ptcl_statement_type_decl ptcl_parser_type_decl(ptcl_parser *parser, ptcl_statement_modifiers modifiers);
+ptcl_statement_func_decl ptcl_parser_func_decl(ptcl_parser *parser, bool *is_provider, ptcl_attributes attributes, ptcl_statement_modifiers modifiers);
 
-ptcl_statement_assign ptcl_parser_assign(ptcl_parser *parser, ptcl_name name, ptcl_expression *left, ptcl_statement_modifiers modifiers);
+bool ptcl_parser_typedata_name(ptcl_parser *parser, ptcl_name *name, bool *is_provider, ptcl_attributes attributes, ptcl_statement_modifiers modifiers);
+
+bool ptcl_parser_typedata_body_and_storage(ptcl_parser *parser, ptcl_name name, ptcl_statement_typedata_decl *decl, ptcl_statement_modifiers modifiers);
+
+ptcl_statement_typedata_decl ptcl_parser_typedata_decl(ptcl_parser *parser, bool *is_provider, ptcl_attributes attributes, ptcl_statement_modifiers modifiers);
+
+bool ptcl_parser_type_name(ptcl_parser *parser, ptcl_name *name, bool *is_provider, ptcl_attributes attributes, ptcl_statement_modifiers modifiers);
+
+bool ptcl_parser_type_body_and_storage(ptcl_parser *parser, ptcl_name name, ptcl_statement_type_decl *decl, ptcl_statement_modifiers modifiers);
+
+ptcl_statement_type_decl ptcl_parser_type_decl(ptcl_parser *parser, bool *is_provider, ptcl_attributes attributes, ptcl_statement_modifiers modifiers);
+
+bool ptcl_parser_assign_name(ptcl_parser *parser, ptcl_expression *left, ptcl_name name, ptcl_parser_assign_dot_data *dot, ptcl_attributes attributes, ptcl_statement_modifiers modifiers);
+
+bool ptcl_parser_assign_var_and_storage(
+    ptcl_parser *parser,
+    ptcl_identifier identifier,
+    ptcl_statement_assign *assign,
+    ptcl_statement_modifiers modifiers,
+    bool is_decl_expected);
+
+ptcl_statement_assign ptcl_parser_assign(ptcl_parser *parser, bool *is_provider, ptcl_name name, ptcl_expression *left, ptcl_attributes attributes, ptcl_statement_modifiers modifiers);
 
 ptcl_statement_return ptcl_parser_return(ptcl_parser *parser);
 
@@ -660,6 +872,8 @@ ptcl_expression *ptcl_parser_dot(ptcl_parser *parser, ptcl_type *except, ptcl_ex
 ptcl_expression *ptcl_parser_array_element(ptcl_parser *parser, ptcl_type *except, ptcl_expression *left, ptcl_parser_expression_flags flags);
 
 ptcl_expression *ptcl_parser_value(ptcl_parser *parser, ptcl_type *except, ptcl_parser_expression_flags flags);
+
+bool ptcl_parser_try_provider_name(ptcl_parser *parser, ptcl_name name, ptcl_statement_type type, ptcl_attributes attributes, ptcl_statement_modifiers modifiers);
 
 ptcl_name ptcl_parser_name_word(ptcl_parser *parser);
 
@@ -744,6 +958,8 @@ bool ptcl_parser_has_state(ptcl_parser *parser, ptcl_parser_flags flag);
 bool ptcl_parser_add_this_pair(ptcl_parser *parser, ptcl_parser_this_s_pair instance);
 
 ptcl_statement *ptcl_parser_insert_pairs(ptcl_parser *parser, ptcl_statement *statement, ptcl_func_body *body);
+
+bool ptcl_parser_add_instance_provider(ptcl_parser *parser, ptcl_parser_provider instance);
 
 bool ptcl_parser_add_instance_syntax(ptcl_parser *parser, ptcl_parser_syntax instance);
 

@@ -257,6 +257,7 @@ typedef struct ptcl_attributes
 {
     ptcl_attribute *attributes;
     size_t count;
+    bool is_free;
 } ptcl_attributes;
 
 typedef struct ptcl_argument
@@ -419,6 +420,7 @@ typedef struct ptcl_expression_cast
 
 typedef struct ptcl_statement_func_call
 {
+    // Will be have garbage
     ptcl_statement_func_decl *func_decl;
     ptcl_identifier identifier;
     ptcl_expression **arguments;
@@ -455,7 +457,7 @@ typedef struct ptcl_statement_func_decl
 {
     ptcl_statement_modifiers modifiers;
     ptcl_func_body *root;
-    ptcl_name name;
+    ptcl_name identifier;
     ptcl_argument *arguments;
     size_t count;
     ptcl_func_body *func_body;
@@ -628,11 +630,12 @@ static ptcl_argument ptcl_argument_create_variadic(bool is_static)
         .is_variadic = true};
 }
 
-static ptcl_attributes ptcl_attributes_create(ptcl_attribute *attributes, size_t count)
+static ptcl_attributes ptcl_attributes_create(ptcl_attribute *attributes, size_t count, bool is_free)
 {
     return (ptcl_attributes){
         .attributes = attributes,
-        .count = count};
+        .count = count,
+        .is_free = is_free};
 }
 
 static ptcl_attribute ptcl_attribute_create(ptcl_name name)
@@ -822,7 +825,7 @@ static ptcl_statement_func_body ptcl_statement_func_body_create_by_body(ptcl_fun
 
 static ptcl_statement *ptcl_func_body_create_stat(ptcl_statement_func_body body, ptcl_func_body *root, ptcl_location location)
 {
-    ptcl_statement *statement = ptcl_statement_create(ptcl_statement_func_body_type, root, ptcl_attributes_create(NULL, 0), location);
+    ptcl_statement *statement = ptcl_statement_create(ptcl_statement_func_body_type, root, ptcl_attributes_create(NULL, 0, true), location);
     if (statement != NULL)
     {
         statement->body = body;
@@ -851,7 +854,7 @@ static ptcl_expression *ptcl_expression_create_null(ptcl_location location)
 static ptcl_statement_func_decl ptcl_statement_func_decl_create(
     ptcl_statement_modifiers modifiers,
     ptcl_func_body *root,
-    ptcl_name name,
+    ptcl_name identifier,
     ptcl_argument *arguments,
     size_t count,
     ptcl_func_body *func_body,
@@ -862,7 +865,7 @@ static ptcl_statement_func_decl ptcl_statement_func_decl_create(
     return (ptcl_statement_func_decl){
         .modifiers = modifiers,
         .root = root,
-        .name = name,
+        .identifier = identifier,
         .arguments = arguments,
         .count = count,
         .func_body = func_body,
@@ -2132,6 +2135,149 @@ static ptcl_expression *ptcl_expression_static_cast(ptcl_expression *expression)
     return result;
 }
 
+static bool ptcl_expression_equals(ptcl_expression *left, ptcl_expression *right)
+{
+    if (left == right)
+    {
+        return true;
+    }
+
+    if (left->type != right->type)
+    {
+        return false;
+    }
+
+    switch (left->type)
+    {
+    case ptcl_expression_lated_func_body_type:
+        return left->lated_body.index == right->lated_body.index;
+    case ptcl_expression_array_type:
+        if (left->array.expressions == right->array.expressions)
+        {
+            return true;
+        }
+
+        if (left->array.count != right->array.count)
+        {
+            return false;
+        }
+
+        for (size_t i = 0; i < left->array.count; i++)
+        {
+            if (!ptcl_expression_equals(left->array.expressions[i], right->array.expressions[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    case ptcl_expression_variable_type:
+        return left->variable.variable_id == right->variable.variable_id;
+    case ptcl_expression_character_type:
+        return left->character == right->character;
+    case ptcl_expression_double_type:
+        return left->double_n == right->double_n;
+    case ptcl_expression_float_type:
+        return left->float_n == right->float_n;
+    case ptcl_expression_integer_type:
+        return left->integer_n == right->integer_n;
+    case ptcl_expression_binary_type:
+        return left->binary.type == right->binary.type && ptcl_expression_equals(left->binary.left, right->binary.right);
+    case ptcl_expression_cast_type:
+        return ptcl_type_equals(left->cast.type, right->cast.type) && ptcl_expression_equals(left->cast.value, right->cast.value);
+    case ptcl_expression_unary_type:
+        return left->unary.type == right->unary.type && ptcl_expression_equals(left->unary.child, right->unary.child);
+    case ptcl_expression_array_element_type:
+        return ptcl_expression_equals(left->array_element.index, right->array_element.index) && ptcl_expression_equals(left->array_element.value, right->array_element.value);
+    case ptcl_expression_dot_type:
+        if (left->dot.is_name != right->dot.is_name || !ptcl_expression_equals(left->dot.left, right->dot.left))
+        {
+            return false;
+        }
+
+        if (left->dot.is_name)
+        {
+            return ptcl_name_compare(left->dot.name, right->dot.name);
+        }
+
+        return ptcl_expression_equals(left->dot.right, right->dot.right);
+    case ptcl_expression_ctor_type:
+        if (!ptcl_name_compare(left->ctor.name, right->ctor.name))
+        {
+            return false;
+        }
+
+        if (left->ctor.values == right->ctor.values)
+        {
+            return true;
+        }
+
+        for (size_t i = 0; i < left->ctor.count; i++)
+        {
+            if (!ptcl_expression_equals(left->ctor.values[i], right->ctor.values[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    case ptcl_expression_if_type:
+        // If else_body is null, then first pointers condition will be true
+        if (
+            !ptcl_expression_equals(left->if_expr.condition, right->if_expr.condition) ||
+            !ptcl_expression_equals(left->if_expr.body, right->if_expr.body) ||
+            !ptcl_expression_equals(left->if_expr.else_body, right->if_expr.else_body))
+        {
+            return false;
+        }
+
+        return true;
+    case ptcl_expression_func_call_type:
+        if (left->func_call.identifier.is_name != right->func_call.identifier.is_name || left->func_call.count != right->func_call.count)
+        {
+            return false;
+        }
+
+        if (left->func_call.identifier.is_name) 
+        {
+            if (!ptcl_name_compare(left->func_call.identifier.name, right->func_call.identifier.name))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (!ptcl_expression_equals(left->func_call.identifier.value, right->func_call.identifier.value))
+            {
+                return false;
+            }
+        }
+
+        for (size_t i = 0; i < left->func_call.count; i++)
+        {
+            if (!ptcl_expression_equals(left->func_call.arguments[i], right->func_call.arguments[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    case ptcl_expression_word_type:
+        return ptcl_name_compare(left->word, right->word);
+    case ptcl_expression_object_type_type:
+        return ptcl_type_equals(left->object_type.type, right->object_type.type);
+    case ptcl_expression_null_type:
+        return true;
+    // TODO: make statements checks
+    case ptcl_expression_in_statement_type:
+    case ptcl_expression_in_expression_type:
+    case ptcl_expression_in_token_type:
+        return true;
+    }
+
+    return false;
+}
+
 static void ptcl_expression_by_count_destroy(ptcl_expression **expressions, size_t count)
 {
     for (size_t i = 0; i < count; i++)
@@ -2711,12 +2857,15 @@ static void ptcl_attribute_destroy(ptcl_attribute attribute)
 
 static void ptcl_attributes_destroy(ptcl_attributes attributes)
 {
-    for (size_t i = 0; i < attributes.count; i++)
+    if (attributes.is_free) 
     {
-        ptcl_attribute_destroy(attributes.attributes[i]);
-    }
+        for (size_t i = 0; i < attributes.count; i++)
+        {
+            ptcl_attribute_destroy(attributes.attributes[i]);
+        }
 
-    free(attributes.attributes);
+        free(attributes.attributes);
+    }
 }
 
 static void ptcl_func_body_destroy(ptcl_func_body func_body)
@@ -2884,7 +3033,7 @@ static void ptcl_argument_destroy(ptcl_argument argument)
 
 static void ptcl_statement_func_decl_destroy(ptcl_statement_func_decl func_decl)
 {
-    ptcl_name_destroy(func_decl.name);
+    ptcl_name_destroy(func_decl.identifier);
     ptcl_type_destroy(func_decl.return_type);
     if (!ptcl_statement_modifiers_flags_prototype(func_decl.modifiers) && func_decl.func_body != NULL)
     {

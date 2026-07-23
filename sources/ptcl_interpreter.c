@@ -387,7 +387,7 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *inter
                 continue;
             }
 
-            if (!ptcl_interpreter_add_variable(interpreter, variable.name, variable.built_in, false))
+            if (!ptcl_interpreter_add_variable(interpreter, variable.identifier, variable.built_in, false))
             {
                 ptcl_parser_throw_out_of_memory(interpreter->parser, location);
                 return NULL;
@@ -395,7 +395,7 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *inter
         }
     }
 
-    if (ptcl_interpreter_was_called(interpreter, func_call.func_decl->name))
+    if (ptcl_interpreter_was_called(interpreter, func_call.func_decl->identifier))
     {
         ptcl_interpreter_var_index arguments_array[PTCL_INTERPRETER_DEFAULT_ARGUMENTS_CAPACITY];
         ptcl_interpreter_var_index *arguments = arguments_array;
@@ -481,7 +481,7 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *inter
         return result;
     }
 
-    interpreter->stack_trace[interpreter->stack_trace_count++] = func_call.func_decl->name;
+    interpreter->stack_trace[interpreter->stack_trace_count++] = func_call.func_decl->identifier;
     size_t variables_count = interpreter->variables_count;
     if (self != NULL)
     {

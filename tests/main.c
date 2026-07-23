@@ -5,6 +5,13 @@
 #include <windows.h>
 
 // TODO: arrange structure members for greater speed
+// TODO: delete all int's with < 0 checking. Use size_t and bool (or ptrdiff_t)
+// TODO: fix "lated"
+// TODO: make overloads by linked arrays
+// TODO: float, integer, double - we need to make it more natural
+// TODO: use pointer argument as index in 'for' is bad
+// TODO: SOA for somethings
+
 
 int main()
 {

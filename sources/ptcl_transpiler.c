@@ -613,7 +613,7 @@ void ptcl_transpiler_add_statement(ptcl_transpiler *transpiler, ptcl_statement *
         break;
     }
     case ptcl_statement_func_decl_type:
-        ptcl_transpiler_add_func_decl(transpiler, statement->func_decl, statement->func_decl.name, NULL);
+        ptcl_transpiler_add_func_decl(transpiler, statement->func_decl, statement->func_decl.identifier, NULL);
         break;
     case ptcl_statement_type_decl_type:
     {
@@ -623,7 +623,7 @@ void ptcl_transpiler_add_statement(ptcl_transpiler *transpiler, ptcl_statement *
             for (size_t i = 0; i < statement->type_decl.functions->count; i++)
             {
                 ptcl_statement_func_decl function = statement->type_decl.functions->statements[i]->func_decl;
-                char *name = ptcl_transpiler_get_func_name_in_type(statement->type_decl.name.value, function.name.value, base_type.is_static);
+                char *name = ptcl_transpiler_get_func_name_in_type(statement->type_decl.name.value, function.identifier.value, base_type.is_static);
                 ptcl_transpiler_add_func_decl(transpiler, function, ptcl_name_create_fast_w(name, false), &base_type);
                 free(name);
             }
@@ -895,7 +895,7 @@ void ptcl_transpiler_add_func_decl(ptcl_transpiler *transpiler, ptcl_statement_f
     if (transpiler->in_inner)
     {
         transpiler->from_position = true;
-        ptcl_transpiler_add_inner_func(transpiler, func_decl.name, transpiler->root);
+        ptcl_transpiler_add_inner_func(transpiler, func_decl.identifier, transpiler->root);
     }
 
     int previous_start = -1;

@@ -22,59 +22,23 @@ function print(content: any): static void {
 	}
 }
 
-syntax object_name [name: static word] {
-	!<__object_ !name>
-}
-
-syntax object [name: static word] [{] [variables: ...] [}] with [body: static (): void] {
-	~typedata_name: static word = #object_name(name)
-	typedata !~typedata_name(ptcl_insert(variables))
-	type !name: !~typedata_name {
-		ptcl_insert(ptcl_get_statements(body))
+type list provider(T: static type) {
+	: !T* {
+		function g(self): void {}
 	}
 }
 
-syntax create [name: static word]([arguments: ...]) {
-	@{
-		~instance := (#object_name(name)(!none) :: !name)
-		~instance.constructor(ptcl_insert(arguments))
+function create provider(T: static type) {
+	(capacity: integer): list(T) {
+		return null :: list(>integer)
 	}
-
-	~instance
 }
 
-syntax delete [name: any] {
-	name.destructor()
+list_instance provider(T: static type){
+	: list(T) = create(T)(8)
 }
 
 function main(): integer {
-	val: static character[] = "1"
-	counter: static integer = 0
-	each d, val {
-		counter = counter + 1
-		~name: static word = !<dog !<_ word(counter)>> 
-		#object !~name {
-			name: character*,
-			years: integer,
-			created: integer
-		} with {
-			function constructor(self, name: character*, years: integer): void {
-				self.name = name
-				self.years = years
-				self.created = 1
-			}
-
-			function destructor(self): void {
-				self.created = 0
-			}
-
-			function speak(self): void {
-				printf(self.name)
-			}
-		}
-
-		!<foo !<_ word(counter)>> := #create ~name("Doggy", counter)
-	}
-	
+	variable := list_instance(>integer)
 	return 0
 }
