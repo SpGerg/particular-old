@@ -85,7 +85,8 @@
       <WarningLevel>Level3</WarningLevel>
       <AdditionalIncludeDirectories>C:\Users\spger\Desktop\particular-lang\includes;C:\Users\spger\Desktop\particular-lang\includes\lexer;C:\Users\spger\Desktop\particular-lang\includes\parser;C:\Users\spger\Desktop\particular-lang\includes\transpiler;C:\Users\spger\Desktop\particular-lang\includes\utilities;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
-      <LanguageStandard_C>Default</LanguageStandard_C>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -98,7 +99,9 @@
       <WarningLevel>Level3</WarningLevel>
       <AdditionalIncludeDirectories>C:\Users\spger\Desktop\particular-lang\includes;C:\Users\spger\Desktop\particular-lang\includes\lexer;C:\Users\spger\Desktop\particular-lang\includes\parser;C:\Users\spger\Desktop\particular-lang\includes\transpiler;C:\Users\spger\Desktop\particular-lang\includes\utilities;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
-      <LanguageStandard_C>Default</LanguageStandard_C>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <OmitFramePointers>false</OmitFramePointers>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -111,7 +114,9 @@
       <WarningLevel>Level3</WarningLevel>
       <AdditionalIncludeDirectories>C:\Users\spger\Desktop\particular-lang\includes;C:\Users\spger\Desktop\particular-lang\includes\lexer;C:\Users\spger\Desktop\particular-lang\includes\parser;C:\Users\spger\Desktop\particular-lang\includes\transpiler;C:\Users\spger\Desktop\particular-lang\includes\utilities;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
-      <LanguageStandard_C>Default</LanguageStandard_C>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
+      <Optimization>Disabled</Optimization>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -126,7 +131,10 @@
       <WarningLevel>Level3</WarningLevel>
       <AdditionalIncludeDirectories>C:\Users\spger\Desktop\particular-lang\includes;C:\Users\spger\Desktop\particular-lang\includes\lexer;C:\Users\spger\Desktop\particular-lang\includes\parser;C:\Users\spger\Desktop\particular-lang\includes\transpiler;C:\Users\spger\Desktop\particular-lang\includes\utilities;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <CompileAs>CompileAsC</CompileAs>
-      <LanguageStandard_C>Default</LanguageStandard_C>
+      <LanguageStandard_C>stdc11</LanguageStandard_C>
+      <Optimization>Disabled</Optimization>
+      <InlineFunctionExpansion>Disabled</InlineFunctionExpansion>
+      <OmitFramePointers>false</OmitFramePointers>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>

@@ -10,26 +10,54 @@
 
 typedef struct ptcl_interpreter ptcl_interpreter;
 
-ptcl_interpreter *ptcl_interpreter_create(ptcl_parser *parser);
+ptcl_interpreter *ptcl_interpreter_create(
+	ptcl_parser *parser);
 
-ptcl_expression *ptcl_interpreter_evaluate_func_body(ptcl_interpreter *interpreter, ptcl_func_body func_body, ptcl_location location);
+ptcl_expression *ptcl_interpreter_evaluate_func_body(
+	ptcl_interpreter *interpreter, 
+	const ptcl_func_body *const func_body, 
+	ptcl_location location);
 
-ptcl_expression *ptcl_interpreter_evaluate_statement(ptcl_interpreter *interpreter, ptcl_statement *statement, ptcl_location location);
+ptcl_expression *ptcl_interpreter_evaluate_statement(
+	ptcl_interpreter *interpreter, 
+	ptcl_statement *statement, 
+	ptcl_location location);
 
-ptcl_expression *ptcl_interpreter_evaluate_expression(ptcl_interpreter *interpreter, ptcl_expression *expression, ptcl_location location);
+ptcl_expression *ptcl_interpreter_evaluate_expression(
+	ptcl_interpreter *interpreter, 
+	ptcl_expression *expression, 
+	ptcl_location location);
 
-ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *interpreter, ptcl_statement_func_call func_call, bool evaluate_arguments, ptcl_expression *self, bool *is_self_used, ptcl_location location);
+ptcl_expression *ptcl_interpreter_evaluate_function_call(
+	ptcl_interpreter *interpreter, 
+	const ptcl_statement_func_call *const func_call,
+	bool evaluate_arguments,
+	ptcl_expression *self,
+	bool *is_self_used,
+	ptcl_location location);
 
-ptcl_expression *ptcl_interpreter_get_member_from_dot(ptcl_interpreter *interpreter, ptcl_expression *expression, ptcl_location location);
+ptcl_expression *ptcl_interpreter_get_member_from_dot(
+	ptcl_interpreter *interpreter, 
+	ptcl_expression *expression, 
+	ptcl_location location);
 
-ptcl_expression *ptcl_interpreter_get_value(ptcl_interpreter *interpreter, ptcl_name name);
+ptcl_expression *ptcl_interpreter_get_value(
+	ptcl_interpreter *interpreter, 
+	const ptcl_name *const identifier);
 
-bool ptcl_interpreter_add_variable(ptcl_interpreter *interpreter, ptcl_name name, ptcl_expression *value, bool is_destroy);
+bool ptcl_interpreter_add_variable(
+	ptcl_interpreter *interpreter, 
+	const ptcl_name *const identifier, 
+	ptcl_expression *value, bool is_destroy);
 
-bool ptcl_interpreter_was_called(ptcl_interpreter *interpreter, ptcl_name name);
+bool ptcl_interpreter_was_called(
+	ptcl_interpreter *interpreter, 
+	const ptcl_name* const identifier);
 
-void ptcl_interpreter_reset(ptcl_interpreter *interpreter);
+void ptcl_interpreter_reset(
+	ptcl_interpreter *interpreter);
 
-void ptcl_interpreter_destroy(ptcl_interpreter *interpreter);
+void ptcl_interpreter_destroy(
+	ptcl_interpreter *interpreter);
 
 #endif // PTCL_INTERPRETER_H

@@ -2,7 +2,7 @@
 
 typedef struct ptcl_interpreter_variable
 {
-    ptcl_name name;
+    ptcl_name identifier;
     ptcl_expression *value;
     bool is_destroy;
 } ptcl_interpreter_variable;
@@ -10,7 +10,7 @@ typedef struct ptcl_interpreter_variable
 typedef struct ptcl_interpreter_var_index
 {
     ptcl_interpreter_variable variable;
-    size_t index;
+    ptrdiff_t index;
 } ptcl_interpreter_var_index;
 
 typedef struct ptcl_interpreter
@@ -21,7 +21,7 @@ typedef struct ptcl_interpreter
     ptcl_interpreter_variable *variables;
     size_t variables_count;
     size_t variables_capacity;
-    ptcl_statement_func_decl *func_decl;
+    ptrdiff_t function_id;
     bool *is_self_used;
     bool is_in_return;
 } ptcl_interpreter;
@@ -44,18 +44,21 @@ ptcl_interpreter *ptcl_interpreter_create(ptcl_parser *parser)
     }
 
     interpreter->stack_trace_count = 0;
-    interpreter->func_decl = NULL;
+    interpreter->function_id = -1;
     interpreter->is_self_used = NULL;
     interpreter->is_in_return = false;
     return interpreter;
 }
 
-ptcl_expression *ptcl_interpreter_evaluate_func_body(ptcl_interpreter *interpreter, ptcl_func_body func_body, ptcl_location location)
+ptcl_expression *ptcl_interpreter_evaluate_func_body(
+    ptcl_interpreter *interpreter,
+    const ptcl_func_body *const func_body,
+    ptcl_location location)
 {
     ptcl_expression *result = NULL;
-    for (size_t i = 0; i < func_body.count; i++)
+    for (size_t i = 0; i < func_body->count; i++)
     {
-        result = ptcl_interpreter_evaluate_statement(interpreter, func_body.statements[i], location);
+        result = ptcl_interpreter_evaluate_statement(interpreter, func_body->statements[i], location);
         if (ptcl_parser_critical(interpreter->parser))
         {
             break;
@@ -75,11 +78,11 @@ ptcl_expression *ptcl_interpreter_evaluate_statement(ptcl_interpreter *interpret
     switch (statement->type)
     {
     case ptcl_statement_func_body_type:
-        return ptcl_interpreter_evaluate_func_body(interpreter, statement->body.body, location);
+        return ptcl_interpreter_evaluate_func_body(interpreter, &statement->body.body, location);
     case ptcl_statement_func_call_type:
     {
         bool placeholder = false;
-        return ptcl_interpreter_evaluate_function_call(interpreter, statement->func_call, true, NULL, &placeholder, location);
+        return ptcl_interpreter_evaluate_function_call(interpreter, &statement->func_call, true, NULL, &placeholder, location);
     }
     case ptcl_statement_assign_type:
     {
@@ -91,7 +94,7 @@ ptcl_expression *ptcl_interpreter_evaluate_statement(ptcl_interpreter *interpret
 
         if (statement->assign.is_define)
         {
-            if (!ptcl_interpreter_add_variable(interpreter, statement->assign.identifier.name, variable_value, true))
+            if (!ptcl_interpreter_add_variable(interpreter, &statement->assign.identifier.name, variable_value, true))
             {
                 ptcl_expression_destroy(variable_value);
                 return NULL;
@@ -130,16 +133,16 @@ ptcl_expression *ptcl_interpreter_evaluate_statement(ptcl_interpreter *interpret
         }
 
         int condition_value = condition->integer_n;
-        free(condition);
+        ptcl_expression_destroy(condition);
         if (condition_value)
         {
-            return ptcl_interpreter_evaluate_func_body(interpreter, statement->if_stat.body, location);
+            return ptcl_interpreter_evaluate_func_body(interpreter, &statement->if_stat.body, location);
         }
         else
         {
             if (statement->if_stat.with_else)
             {
-                return ptcl_interpreter_evaluate_func_body(interpreter, statement->if_stat.else_body, location);
+                return ptcl_interpreter_evaluate_func_body(interpreter, &statement->if_stat.else_body, location);
             }
         }
 
@@ -155,7 +158,7 @@ ptcl_expression *ptcl_interpreter_evaluate_statement(ptcl_interpreter *interpret
     case ptcl_statement_undefine_type:
     case ptcl_statement_unsyntax_type:
     case ptcl_statement_syntax_type:
-    case ptcl_statement_each_type:
+    case ptcl_statement_loop_type:
     case ptcl_statement_func_decl_type:
     case ptcl_statement_type_decl_type:
     case ptcl_statement_typedata_decl_type:
@@ -182,7 +185,7 @@ ptcl_expression *ptcl_interpreter_evaluate_expression(ptcl_interpreter *interpre
     case ptcl_expression_func_call_type:
     {
         bool placeholder = false;
-        result = ptcl_interpreter_evaluate_function_call(interpreter, expression->func_call, true, NULL, &placeholder, location);
+        result = ptcl_interpreter_evaluate_function_call(interpreter, &expression->func_call, true, NULL, &placeholder, location);
         if (result == NULL)
         {
             return NULL;
@@ -192,7 +195,7 @@ ptcl_expression *ptcl_interpreter_evaluate_expression(ptcl_interpreter *interpre
     }
     case ptcl_expression_array_type:
     {
-        ptcl_expression *array_expression = ptcl_expression_array_create(expression->return_type, expression->array.expressions, expression->array.count, location);
+        ptcl_expression *array_expression = ptcl_expression_array_create(&expression->return_type, expression->array.expressions, expression->array.count, location);
         if (array_expression == NULL)
         {
             ptcl_parser_throw_out_of_memory(interpreter->parser, location);
@@ -243,7 +246,7 @@ ptcl_expression *ptcl_interpreter_evaluate_expression(ptcl_interpreter *interpre
             }
 
             bool placeholder = false;
-            return ptcl_interpreter_evaluate_function_call(interpreter, expression->dot.right->func_call, true, self, &placeholder, location);
+            return ptcl_interpreter_evaluate_function_call(interpreter, &expression->dot.right->func_call, true, self, &placeholder, location);
         }
 
         break;
@@ -301,19 +304,18 @@ ptcl_expression *ptcl_interpreter_evaluate_expression(ptcl_interpreter *interpre
         break;
     }
     case ptcl_expression_variable_type:
-        if (interpreter->is_in_return && ptcl_name_compare(expression->variable.name, ptcl_name_self))
+        if (interpreter->is_in_return && ptcl_name_compare(&expression->variable.name, &ptcl_name_self))
         {
             *interpreter->is_self_used = true;
         }
 
-        result = ptcl_interpreter_get_value(interpreter, expression->variable.name);
+        result = ptcl_interpreter_get_value(interpreter, &expression->variable.name);
         if (result == NULL || !result->return_type.is_static)
         {
             return NULL;
         }
 
         result = ptcl_interpreter_evaluate_expression(interpreter, result, location);
-        result->return_type = interpreter->func_decl->return_type;
         result->with_type = false;
         break;
     case ptcl_expression_character_type:
@@ -358,36 +360,49 @@ ptcl_expression *ptcl_interpreter_evaluate_expression(ptcl_interpreter *interpre
     return result;
 }
 
-ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *interpreter, ptcl_statement_func_call func_call, bool evaluate_arguments, ptcl_expression *self, bool *is_self_used, ptcl_location location)
+ptcl_expression *ptcl_interpreter_evaluate_function_call(
+    ptcl_interpreter *interpreter,
+    const ptcl_statement_func_call *const func_call,
+    bool evaluate_arguments,
+    ptcl_expression *self,
+    bool *is_self_used,
+    ptcl_location location)
 {
-    if (func_call.identifier.is_name && strcmp(func_call.identifier.name.value, PTCL_PARSER_ERROR_FUNC_NAME) == 0)
+    if (func_call->identifier.is_name && strcmp(func_call->identifier.name.value, PTCL_PARSER_ERROR_FUNC_NAME) == 0)
     {
-        ptcl_parser_throw_user(interpreter->parser, ptcl_string_from_array(func_call.arguments[0]->array), location);
+        ptcl_parser_throw_user(interpreter->parser, ptcl_string_from_array(&func_call->arguments[0]->array), location);
         return NULL;
     }
 
-    if (ptcl_statement_modifiers_flags_prototype(func_call.func_decl->modifiers) || func_call.func_decl->func_body == NULL)
+    ptcl_parser_function *function;
+    if (!ptcl_parser_try_get_function_by_id(interpreter->parser, func_call->function_id, &function)) 
     {
         return NULL;
     }
 
-    const bool is_root = interpreter->func_decl == NULL;
+    ptcl_statement_func_decl* func_decl = &function->func;
+    if (ptcl_statement_modifiers_flags_prototype(func_decl->modifiers) || func_decl->func_body == NULL)
+    {
+        return NULL;
+    }
+
+    const bool is_root = interpreter->function_id < 0;
     if (is_root)
     {
-        interpreter->func_decl = func_call.func_decl;
+        interpreter->function_id = func_call->function_id;
         interpreter->is_self_used = is_self_used;
         *interpreter->is_self_used = false;
         size_t count = ptcl_parser_variables_count(interpreter->parser);
         ptcl_parser_variable *variables = ptcl_parser_variables(interpreter->parser);
         for (size_t i = 0; i < count; i++)
         {
-            ptcl_parser_variable variable = variables[i];
-            if (variable.is_out_of_scope || variable.is_syntax_variable || !variable.is_built_in || !ptcl_func_body_can_access(variable.root, ptcl_parser_root(interpreter->parser)))
+            ptcl_parser_variable *variable = &variables[i];
+            if (variable->is_out_of_scope || variable->is_syntax_variable || !variable->is_built_in || !ptcl_func_body_can_access(variable->root, ptcl_parser_root(interpreter->parser)))
             {
                 continue;
             }
 
-            if (!ptcl_interpreter_add_variable(interpreter, variable.identifier, variable.built_in, false))
+            if (!ptcl_interpreter_add_variable(interpreter, &variable->identifier, variable->built_in, false))
             {
                 ptcl_parser_throw_out_of_memory(interpreter->parser, location);
                 return NULL;
@@ -395,24 +410,18 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *inter
         }
     }
 
-    if (ptcl_interpreter_was_called(interpreter, func_call.func_decl->identifier))
+    if (ptcl_interpreter_was_called(interpreter, &func_decl->identifier))
     {
-        ptcl_interpreter_var_index arguments_array[PTCL_INTERPRETER_DEFAULT_ARGUMENTS_CAPACITY];
-        ptcl_interpreter_var_index *arguments = arguments_array;
-        bool needs_free = (func_call.func_decl->count >= PTCL_INTERPRETER_MAX_ARGUMENTS);
-        if (needs_free)
+        ptcl_interpreter_var_index *arguments = malloc(func_decl->count * sizeof(ptcl_interpreter_var_index));
+        if (arguments == NULL && func_decl->count > 0)
         {
-            arguments = malloc(func_call.func_decl->count * sizeof(ptcl_interpreter_var_index));
-            if (arguments == NULL && func_call.func_decl->count > 0)
-            {
-                ptcl_parser_throw_out_of_memory(interpreter->parser, location);
-                return NULL;
-            }
+            ptcl_parser_throw_out_of_memory(interpreter->parser, location);
+            return NULL;
         }
 
         ptcl_interpreter_var_index last_self = {0};
         last_self.index = -1;
-        for (size_t i = 0; i < func_call.func_decl->count; i++)
+        for (size_t i = 0; i < func_decl->count; i++)
         {
             if (interpreter->variables_count == 0)
             {
@@ -423,7 +432,7 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *inter
             {
                 const size_t index = interpreter->variables_count - 1 - j;
                 ptcl_interpreter_variable *variable = &interpreter->variables[index];
-                if (self != NULL && ptcl_name_compare(variable->name, ptcl_name_self))
+                if (self != NULL && ptcl_name_compare(&variable->identifier, &ptcl_name_self))
                 {
                     last_self.index = index;
                     last_self.variable = *variable;
@@ -431,7 +440,7 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *inter
                     continue;
                 }
 
-                if (!ptcl_name_compare(variable->name, func_call.func_decl->arguments[i].name))
+                if (!ptcl_name_compare(&variable->identifier, &func_decl->arguments[i].name))
                 {
                     continue;
                 }
@@ -440,25 +449,25 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *inter
                 pair->variable = *variable;
                 pair->index = index;
                 ptcl_expression *value = evaluate_arguments
-                                             ? ptcl_interpreter_evaluate_expression(interpreter, func_call.arguments[i], location)
-                                             : func_call.arguments[i];
+                                             ? ptcl_interpreter_evaluate_expression(interpreter, func_call->arguments[i], location)
+                                             : func_call->arguments[i];
                 variable->value = value;
                 variable->is_destroy = evaluate_arguments;
                 break;
             }
         }
 
-        ptcl_expression *result = ptcl_interpreter_evaluate_func_body(interpreter, *func_call.func_decl->func_body, location);
-        for (size_t i = 0; i < func_call.func_decl->count; i++)
+        ptcl_expression *result = ptcl_interpreter_evaluate_func_body(interpreter, func_decl->func_body, location);
+        for (size_t i = 0; i < func_decl->count; i++)
         {
-            ptcl_interpreter_var_index pair = arguments[i];
-            ptcl_interpreter_variable *variable = &interpreter->variables[pair.index];
+            ptcl_interpreter_var_index *pair = &arguments[i];
+            ptcl_interpreter_variable *variable = &interpreter->variables[pair->index];
             if (variable->is_destroy)
             {
                 ptcl_expression_destroy(variable->value);
             }
 
-            *variable = pair.variable;
+            *variable = pair->variable;
         }
 
         if (last_self.index > 0)
@@ -469,48 +478,44 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *inter
 
         if (is_root)
         {
-            interpreter->func_decl = NULL;
+            interpreter->function_id = -1;
             interpreter->stack_trace_count = 0;
         }
 
-        if (needs_free)
-        {
-            free(arguments);
-        }
-
+        free(arguments);
         return result;
     }
 
-    interpreter->stack_trace[interpreter->stack_trace_count++] = func_call.func_decl->identifier;
+    interpreter->stack_trace[interpreter->stack_trace_count++] = func_decl->identifier;
     size_t variables_count = interpreter->variables_count;
     if (self != NULL)
     {
-        if (!ptcl_interpreter_add_variable(interpreter, ptcl_name_self, self, evaluate_arguments))
+        if (!ptcl_interpreter_add_variable(interpreter, &ptcl_name_self, self, evaluate_arguments))
         {
             ptcl_parser_throw_out_of_memory(interpreter->parser, location);
             return NULL;
         }
     }
 
-    for (size_t i = 0; i < func_call.count; i++)
+    for (size_t i = 0; i < func_call->count; i++)
     {
-        ptcl_argument argument = func_call.func_decl->arguments[i];
-        if (argument.is_variadic)
+        ptcl_argument *argument = &func_decl->arguments[i];
+        if (argument->is_variadic)
         {
             continue;
         }
 
         ptcl_expression *value = evaluate_arguments
-                                     ? ptcl_interpreter_evaluate_expression(interpreter, func_call.arguments[i], location)
-                                     : func_call.arguments[i];
-        if (!ptcl_interpreter_add_variable(interpreter, argument.name, value, evaluate_arguments))
+                                     ? ptcl_interpreter_evaluate_expression(interpreter, func_call->arguments[i], location)
+                                     : func_call->arguments[i];
+        if (!ptcl_interpreter_add_variable(interpreter, &argument->name, value, evaluate_arguments))
         {
             ptcl_parser_throw_out_of_memory(interpreter->parser, location);
             return NULL;
         }
     }
 
-    ptcl_expression *result = ptcl_interpreter_evaluate_func_body(interpreter, *func_call.func_decl->func_body, location);
+    ptcl_expression *result = ptcl_interpreter_evaluate_func_body(interpreter, func_decl->func_body, location);
     for (size_t i = variables_count; i < interpreter->variables_count; i++)
     {
         ptcl_interpreter_variable variable = interpreter->variables[i];
@@ -523,14 +528,17 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(ptcl_interpreter *inter
     interpreter->variables_count = variables_count;
     if (is_root)
     {
-        interpreter->func_decl = NULL;
+        interpreter->function_id = -1;
         interpreter->stack_trace_count = 0;
     }
 
     return result;
 }
 
-ptcl_expression *ptcl_interpreter_get_member_from_dot(ptcl_interpreter *interpreter, ptcl_expression *expression, ptcl_location location)
+ptcl_expression *ptcl_interpreter_get_member_from_dot(
+    ptcl_interpreter *interpreter,
+    ptcl_expression *expression,
+    ptcl_location location)
 {
     if (!expression->dot.is_name)
     {
@@ -552,7 +560,7 @@ ptcl_expression *ptcl_interpreter_get_member_from_dot(ptcl_interpreter *interpre
     ptcl_name name = expression->dot.name;
     ptcl_argument *member;
     size_t index;
-    if (!ptcl_parser_try_get_typedata_member(interpreter->parser, typedata, name.value, &member, &index))
+    if (!ptcl_parser_try_get_typedata_member(interpreter->parser, &typedata, name.value, &member, &index))
     {
         ptcl_parser_throw_unknown_member(interpreter->parser, name.value, location);
         ptcl_expression_destroy(left);
@@ -564,8 +572,11 @@ ptcl_expression *ptcl_interpreter_get_member_from_dot(ptcl_interpreter *interpre
     return value;
 }
 
-ptcl_expression *ptcl_interpreter_get_value(ptcl_interpreter *interpreter, ptcl_name name)
+ptcl_expression *ptcl_interpreter_get_value(
+    ptcl_interpreter *interpreter,
+    const ptcl_name *const identifier)
 {
+    PTCL_VALIDATE_COND(identifier != NULL);
     if (interpreter->variables_count == 0)
     {
         return NULL;
@@ -574,20 +585,21 @@ ptcl_expression *ptcl_interpreter_get_value(ptcl_interpreter *interpreter, ptcl_
     for (size_t j = 0; j < interpreter->variables_count; j++)
     {
         const size_t index = interpreter->variables_count - 1 - j;
-        ptcl_interpreter_variable variable = interpreter->variables[index];
-        if (!ptcl_name_compare(variable.name, name))
+        ptcl_interpreter_variable *variable = &interpreter->variables[index];
+        if (!ptcl_name_compare(&variable->identifier, identifier))
         {
             continue;
         }
 
-        return variable.value;
+        return variable->value;
     }
 
     return NULL;
 }
 
-bool ptcl_interpreter_add_variable(ptcl_interpreter *interpreter, ptcl_name name, ptcl_expression *value, bool is_destroy)
+bool ptcl_interpreter_add_variable(ptcl_interpreter *interpreter, const ptcl_name *const identifier, ptcl_expression *value, bool is_destroy)
 {
+    PTCL_VALIDATE_COND(identifier != NULL);
     if (interpreter->variables_count >= interpreter->variables_capacity)
     {
         interpreter->variables_capacity *= 2;
@@ -602,17 +614,18 @@ bool ptcl_interpreter_add_variable(ptcl_interpreter *interpreter, ptcl_name name
     }
 
     interpreter->variables[interpreter->variables_count++] = (ptcl_interpreter_variable){
-        .name = name,
+        .identifier = *identifier,
         .value = value,
         .is_destroy = is_destroy};
     return true;
 }
 
-bool ptcl_interpreter_was_called(ptcl_interpreter *interpreter, ptcl_name name)
+bool ptcl_interpreter_was_called(ptcl_interpreter *interpreter, const ptcl_name *const identifier)
 {
+    PTCL_VALIDATE_COND(identifier != NULL);
     for (size_t i = 0; i < interpreter->stack_trace_count; i++)
     {
-        if (!ptcl_name_compare(interpreter->stack_trace[i], name))
+        if (!ptcl_name_compare(&interpreter->stack_trace[i], identifier))
         {
             continue;
         }

@@ -6,6 +6,8 @@
 #include <string.h>
 #include <stdarg.h>
 
+#define ptcl_string_equals(left, right) (left == right || strcmp(left, right) == 0)
+
 static inline char *ptcl_string_duplicate(char *source)
 {
     char *copy = malloc(strlen(source) + 1);

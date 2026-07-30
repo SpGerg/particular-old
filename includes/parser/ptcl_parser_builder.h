@@ -43,12 +43,13 @@ static ptcl_comp_type_builder ptcl_comp_type_builder_create(char *name)
 
 static ptcl_type_comp_type ptcl_comp_type_builder_build_type(ptcl_comp_type_builder *builder)
 {
-    return ptcl_type_create_comp_type_empty(ptcl_name_create_fast_w(builder->name, false));
+    ptcl_name name = ptcl_name_create_fast_w(builder->name, false);
+    return ptcl_type_create_comp_type_empty(&name);
 }
 
 static ptcl_parser_comp_type ptcl_comp_type_builder_build(ptcl_comp_type_builder *builder, ptcl_type_comp_type *type)
 {
-    return ptcl_parser_comp_type_create(builder->root, type->identifier, type, false, false);
+    return ptcl_parser_comp_type_create(builder->root, &type->identifier, type, false, false);
 }
 
 static void ptcl_comp_type_builder_destroy(ptcl_comp_type_builder *builder)
@@ -67,13 +68,14 @@ static ptcl_func_built_in_builder ptcl_func_built_in_builder_create(char *name)
 
 static ptcl_parser_function ptcl_func_built_in_builder_build(ptcl_func_built_in_builder *builder)
 {
+    ptcl_name name = ptcl_name_create_fast_w(builder->name, false);
     return ptcl_parser_built_in_create(
         builder->root,
-        ptcl_name_create_fast_w(builder->name, false),
+        &name,
         builder->bind,
         builder->arguments,
         builder->count,
-        builder->return_type);
+        &builder->return_type);
 }
 
 static void ptcl_func_built_in_builder_destroy(ptcl_func_built_in_builder *builder)
@@ -82,16 +84,17 @@ static void ptcl_func_built_in_builder_destroy(ptcl_func_built_in_builder *build
     {
         for (size_t i = 0; i < builder->count; i++)
         {
-            ptcl_argument_destroy(builder->arguments[i]);
+            ptcl_argument_destroy(&builder->arguments[i]);
         }
 
         free(builder->arguments);
     }
 }
 
-static void ptcl_func_built_in_builder_return(ptcl_func_built_in_builder *builder, ptcl_type type)
+static void ptcl_func_built_in_builder_return(ptcl_func_built_in_builder *builder, const ptcl_type *const type)
 {
-    builder->return_type = type;
+    PTCL_VALIDATE_COND(type != NULL);
+    builder->return_type = *type;
 }
 
 static void ptcl_func_built_in_builder_bind(ptcl_func_built_in_builder *builder, ptcl_built_in_function_t bind)
@@ -99,8 +102,9 @@ static void ptcl_func_built_in_builder_bind(ptcl_func_built_in_builder *builder,
     builder->bind = bind;
 }
 
-static bool ptcl_func_built_in_builder_add_argument(ptcl_func_built_in_builder *builder, ptcl_type type)
+static bool ptcl_func_built_in_builder_add_argument(ptcl_func_built_in_builder *builder, const ptcl_type *const type)
 {
+    PTCL_VALIDATE_COND(type != NULL);
     ptcl_argument *buffer = realloc(builder->arguments, (builder->count + 1) * sizeof(ptcl_argument));
     if (buffer == NULL)
     {
@@ -108,7 +112,7 @@ static bool ptcl_func_built_in_builder_add_argument(ptcl_func_built_in_builder *
     }
 
     builder->arguments = buffer;
-    builder->arguments[builder->count++] = ptcl_argument_create(type, ptcl_name_empty);
+    builder->arguments[builder->count++] = ptcl_argument_create(type, &ptcl_name_empty);
     return true;
 }
 
@@ -122,14 +126,17 @@ static ptcl_typedata_builder ptcl_typedata_builder_create(char *name)
         .has_unstatic_member = false};
 }
 
-static ptcl_type_typedata ptcl_typedata_builder_type(ptcl_typedata_builder builder)
+static ptcl_type_typedata ptcl_typedata_builder_type(const ptcl_typedata_builder *const builder)
 {
-    return ptcl_type_typedata_create(ptcl_name_create_fast_w(builder.name, false), builder.members, builder.count, builder.has_unstatic_member);
+    PTCL_VALIDATE_COND(builder != NULL);
+    ptcl_name name = ptcl_name_create_fast_w(builder->name, false);
+    return ptcl_type_typedata_create(&name, builder->members, builder->count, builder->has_unstatic_member);
 }
 
-static ptcl_parser_typedata ptcl_typedata_builder_build(ptcl_typedata_builder builder, ptcl_type_typedata *typedata)
+static ptcl_parser_typedata ptcl_typedata_builder_build(const ptcl_typedata_builder *const builder, ptcl_type_typedata *typedata)
 {
-    return ptcl_parser_typedata_create(builder.root, typedata);
+    PTCL_VALIDATE_COND(builder != NULL);
+    return ptcl_parser_typedata_create(builder->root, typedata);
 }
 
 static void ptcl_typedata_builder_destroy(ptcl_typedata_builder *builder)
@@ -138,7 +145,7 @@ static void ptcl_typedata_builder_destroy(ptcl_typedata_builder *builder)
     {
         for (size_t i = 0; i < builder->count; i++)
         {
-            ptcl_typedata_member_destroy(builder->members[i]);
+            ptcl_typedata_member_destroy(&builder->members[i]);
         }
 
         free(builder->members);
@@ -153,8 +160,9 @@ static bool ptcl_typedata_builder_add_member(ptcl_typedata_builder *builder, cha
         return false;
     }
 
+    ptcl_name member_name = ptcl_name_create_fast_w(name, false);
     builder->members = buffer;
-    builder->members[builder->count] = ptcl_argument_create(type, ptcl_name_create_fast_w(name, false));
+    builder->members[builder->count] = ptcl_argument_create(&type, &member_name);
     builder->count++;
     if (!builder->has_unstatic_member)
     {

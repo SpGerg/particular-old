@@ -37,7 +37,11 @@ typedef struct ptcl_parser_error
 } ptcl_parser_error;
 
 static ptcl_parser_error ptcl_parser_error_create(
-    ptcl_parser_error_type type, bool is_critical, char *message, bool is_free_message, ptcl_location location)
+    ptcl_parser_error_type type, 
+    bool is_critical, 
+    char *message, 
+    bool is_free_message, 
+    ptcl_location location)
 {
     return (ptcl_parser_error){
         .type = type,
@@ -47,9 +51,12 @@ static ptcl_parser_error ptcl_parser_error_create(
         .location = location};
 }
 
-static void ptcl_parser_error_destroy(ptcl_parser_error error) {
-    if (error.is_free_message) {
-        free(error.message);
+static void ptcl_parser_error_destroy(const ptcl_parser_error *const error)
+{
+    PTCL_VALIDATE_COND(error != NULL);
+    if (error->is_free_message)
+    {
+        free(error->message);
     }
 }
 

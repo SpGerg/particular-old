@@ -38,7 +38,23 @@ list_instance provider(T: static type){
 	: list(T) = create(T)(8)
 }
 
+static function fib(n: integer): integer {
+    if n <= 1 {
+        return n
+    }
+
+    return fib(n - 1) + fib(n - 2)
+}
+
+type str: static integer {
+    function length(self, argument: static integer): static integer {
+		variable: static integer = 2 + argument
+		return variable + self
+	}
+}
+
 function main(): integer {
-	variable := list_instance(>integer)
+	g := (123 :: static str).length(123)
+
 	return 0
 }
