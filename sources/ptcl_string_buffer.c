@@ -247,8 +247,12 @@ void ptcl_string_buffer_clear(ptcl_string_buffer* string_buffer)
     string_buffer->length = 0;
     string_buffer->position = 0;
     string_buffer->buffer = realloc(string_buffer->buffer, sizeof(char));
+    if (string_buffer->buffer != NULL) 
+    {
+        string_buffer->buffer[0] = '\0';
+    }
+
     string_buffer->capacity = 1;
-    string_buffer->buffer[0] = '\0';
 }
 
 void ptcl_string_buffer_destroy(ptcl_string_buffer* string_buffer)

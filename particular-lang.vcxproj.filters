@@ -71,5 +71,8 @@
     <ClInclude Include="includes\utilities\ptcl_string_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="includes\utilities\ptcl_utility.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -36,7 +36,6 @@ typedef struct ptcl_transpiler_replaced
     ptcl_name identifier;
     ptcl_name replaced_identifier;
     ptcl_func_body *root;
-    bool cleaned;
 } ptcl_transpiler_replaced;
 
 typedef struct ptcl_transpiler_caller
@@ -44,7 +43,7 @@ typedef struct ptcl_transpiler_caller
     ptcl_func_body *root;
     ptcl_expression *caller;
     size_t start;
-    size_t count; 
+    size_t count;
 } ptcl_transpiler_caller;
 
 static ptcl_transpiler_variable ptcl_transpiler_variable_create(
@@ -67,7 +66,7 @@ static ptcl_transpiler_variable ptcl_transpiler_variable_create_this(
     ptcl_func_body *root)
 {
     PTCL_VALIDATE_COND(type != NULL);
-    ptcl_name identifier = ptcl_name_create_fast_w("this", false);
+    ptcl_name identifier = ptcl_name_create_fast("this", false);
     return (ptcl_transpiler_variable){
         .identifier = identifier,
         .type = *type,
@@ -97,8 +96,7 @@ static ptcl_transpiler_replaced ptcl_transpiler_replaced_name_create(
     return (ptcl_transpiler_replaced){
         .identifier = *identifier,
         .replaced_identifier = *replaced,
-        .root = root,
-        .cleaned = false};
+        .root = root};
 }
 
 static ptcl_transpiler_caller ptcl_transpiler_caller_create(

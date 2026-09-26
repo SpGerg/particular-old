@@ -6,7 +6,7 @@
 
 typedef struct ptcl_typedata_builder
 {
-    char *name;
+    ptcl_name name;
     ptcl_func_body *root;
     ptcl_argument *members;
     size_t count;
@@ -15,7 +15,7 @@ typedef struct ptcl_typedata_builder
 
 typedef struct ptcl_func_built_in_builder
 {
-    char *name;
+    ptcl_name name;
     ptcl_func_body *root;
     ptcl_built_in_function_t bind;
     ptcl_type return_type;
@@ -25,17 +25,18 @@ typedef struct ptcl_func_built_in_builder
 
 typedef struct ptcl_comp_type_builder
 {
-    char *name;
+    ptcl_name name;
     ptcl_func_body *root;
     ptcl_type *types;
     size_t count;
     ptcl_func_body *functions;
 } ptcl_comp_type_builder;
 
-static ptcl_comp_type_builder ptcl_comp_type_builder_create(char *name)
+static ptcl_comp_type_builder ptcl_comp_type_builder_create(const ptcl_name *const name)
 {
+    PTCL_VALIDATE_COND(name != NULL);
     return (ptcl_comp_type_builder){
-        .name = name,
+        .name = *name,
         .types = NULL,
         .count = 0,
         .functions = NULL};
@@ -43,8 +44,7 @@ static ptcl_comp_type_builder ptcl_comp_type_builder_create(char *name)
 
 static ptcl_type_comp_type ptcl_comp_type_builder_build_type(ptcl_comp_type_builder *builder)
 {
-    ptcl_name name = ptcl_name_create_fast_w(builder->name, false);
-    return ptcl_type_create_comp_type_empty(&name);
+    return ptcl_type_create_comp_type_empty(&builder->name);
 }
 
 static ptcl_parser_comp_type ptcl_comp_type_builder_build(ptcl_comp_type_builder *builder, ptcl_type_comp_type *type)
@@ -56,10 +56,11 @@ static void ptcl_comp_type_builder_destroy(ptcl_comp_type_builder *builder)
 {
 }
 
-static ptcl_func_built_in_builder ptcl_func_built_in_builder_create(char *name)
+static ptcl_func_built_in_builder ptcl_func_built_in_builder_create(const ptcl_name *const name)
 {
+    PTCL_VALIDATE_COND(name != NULL);
     return (ptcl_func_built_in_builder){
-        .name = name,
+        .name = *name,
         .root = NULL,
         .return_type = ptcl_type_void,
         .arguments = NULL,
@@ -68,10 +69,9 @@ static ptcl_func_built_in_builder ptcl_func_built_in_builder_create(char *name)
 
 static ptcl_parser_function ptcl_func_built_in_builder_build(ptcl_func_built_in_builder *builder)
 {
-    ptcl_name name = ptcl_name_create_fast_w(builder->name, false);
     return ptcl_parser_built_in_create(
         builder->root,
-        &name,
+        &builder->name,
         builder->bind,
         builder->arguments,
         builder->count,
@@ -116,10 +116,11 @@ static bool ptcl_func_built_in_builder_add_argument(ptcl_func_built_in_builder *
     return true;
 }
 
-static ptcl_typedata_builder ptcl_typedata_builder_create(char *name)
+static ptcl_typedata_builder ptcl_typedata_builder_create(const ptcl_name *const name)
 {
+    PTCL_VALIDATE_COND(name != NULL);
     return (ptcl_typedata_builder){
-        .name = name,
+        .name = *name,
         .root = NULL,
         .members = NULL,
         .count = 0,
@@ -129,8 +130,7 @@ static ptcl_typedata_builder ptcl_typedata_builder_create(char *name)
 static ptcl_type_typedata ptcl_typedata_builder_type(const ptcl_typedata_builder *const builder)
 {
     PTCL_VALIDATE_COND(builder != NULL);
-    ptcl_name name = ptcl_name_create_fast_w(builder->name, false);
-    return ptcl_type_typedata_create(&name, builder->members, builder->count, builder->has_unstatic_member);
+    return ptcl_type_typedata_create(&builder->name, builder->members, builder->count, builder->has_unstatic_member);
 }
 
 static ptcl_parser_typedata ptcl_typedata_builder_build(const ptcl_typedata_builder *const builder, ptcl_type_typedata *typedata)
@@ -160,7 +160,7 @@ static bool ptcl_typedata_builder_add_member(ptcl_typedata_builder *builder, cha
         return false;
     }
 
-    ptcl_name member_name = ptcl_name_create_fast_w(name, false);
+    ptcl_name member_name = ptcl_name_create_fast(name, false);
     builder->members = buffer;
     builder->members[builder->count] = ptcl_argument_create(&type, &member_name);
     builder->count++;

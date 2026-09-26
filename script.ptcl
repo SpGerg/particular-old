@@ -22,23 +22,7 @@ function print(content: any): static void {
 	}
 }
 
-type list provider(T: static type) {
-	: !T* {
-		function g(self): void {}
-	}
-}
-
-function create provider(T: static type) {
-	(capacity: integer): list(T) {
-		return null :: list(>integer)
-	}
-}
-
-list_instance provider(T: static type){
-	: list(T) = create(T)(8)
-}
-
-static function fib(n: integer): integer {
+static function fib(n: integer): static integer {
     if n <= 1 {
         return n
     }
@@ -46,15 +30,28 @@ static function fib(n: integer): integer {
     return fib(n - 1) + fib(n - 2)
 }
 
-type str: static integer {
-    function length(self, argument: static integer): static integer {
-		variable: static integer = 2 + argument
-		return variable + self
+static function list_typedata_name(T: static type): static word {
+	return !<__list_object_ word(T)> 
+}
+
+type list generator(T: static type) {
+	: @{ 
+		~name: static word = list_typedata_name(T)
+		typedata !~name(entities: !T*, count: integer)
+    } !~name {
+		
+	}
+}
+
+function create provider(T: static type) {
+	(capacity: integer): list(T) {
+		return !list_typedata_name(T)(!none) :: list(T)
 	}
 }
 
 function main(): integer {
-	g := (123 :: static str).length(123)
+	g: list(>character) = create(>character)(8)
+	g2w: list(>integer) = create(>integer)(8)
 
 	return 0
 }

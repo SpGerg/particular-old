@@ -13,6 +13,8 @@
 // TODO: use pointer argument as index in 'for' is bad
 // TODO: SOA for somethings
 // TODO: finish pointers with loc
+// sattic void
+
 
 int main()
 {

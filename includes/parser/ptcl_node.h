@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <assert.h>
+#include <ptcl_utility.h>
 #include <ptcl_token.h>
 
 /* Branch prediction hints for performance. Use ptcl_likely(cond) when `cond`
@@ -122,71 +123,56 @@ typedef enum ptcl_binary_operator_type
     ptcl_binary_operator_less_equals_than_type,
 } ptcl_binary_operator_type;
 
-typedef enum ptcl_statement_modifiers
+typedef enum ptcl_stat_mods
 {
-    ptcl_statement_modifiers_none_flag = 0,
-    ptcl_statement_modifiers_const_flag = 1 << 0,
-    ptcl_statement_modifiers_static_flag = 1 << 1,
-    ptcl_statement_modifiers_global_flag = 1 << 2,
-    ptcl_statement_modifiers_prototype_flag = 1 << 3,
-    ptcl_statement_modifiers_auto_flag = 1 << 4,
-    ptcl_statement_modifiers_optional_flag = 1 << 5,
-    ptcl_statement_modifiers_injection_flag = 1 << 6
-} ptcl_statement_modifiers;
+    ptcl_stat_mods_none_flag = 0,
+    ptcl_stat_mods_const_flag = 1 << 0,
+    ptcl_stat_mods_static_flag = 1 << 1,
+    ptcl_stat_mods_global_flag = 1 << 2,
+    ptcl_stat_mods_prototype_flag = 1 << 3,
+    ptcl_stat_mods_auto_flag = 1 << 4,
+    ptcl_stat_mods_optional_flag = 1 << 5,
+    ptcl_stat_mods_injection_flag = 1 << 6
+} ptcl_stat_mods;
 
-static bool ptcl_statement_modifiers_flags_has(ptcl_statement_modifiers flags, ptcl_statement_modifiers flag)
+static bool ptcl_stat_mods_is_flags_prototype(const ptcl_stat_mods flags)
 {
-    return (flags & flag) == flag;
+    return PTCL_FLAGS_HAS(flags, ptcl_stat_mods_prototype_flag);
 }
 
-static void ptcl_statement_modifiers_flags_set(ptcl_statement_modifiers *flags, ptcl_statement_modifiers flag)
+static bool ptcl_stat_mods_is_flags_static(const ptcl_stat_mods flags)
 {
-    *flags |= flag;
+    return PTCL_FLAGS_HAS(flags, ptcl_stat_mods_static_flag);
 }
 
-static void ptcl_statement_modifiers_flags_remove(ptcl_statement_modifiers *flags, ptcl_statement_modifiers flag)
+static bool ptcl_stat_mods_is_flags_global(const ptcl_stat_mods flags)
 {
-    *flags &= ~flag;
+    return PTCL_FLAGS_HAS(flags, ptcl_stat_mods_global_flag);
 }
 
-static bool ptcl_statement_modifiers_flags_prototype(const ptcl_statement_modifiers flags)
+static bool ptcl_stat_mods_is_flags_const(const ptcl_stat_mods flags)
 {
-    return ptcl_statement_modifiers_flags_has(flags, ptcl_statement_modifiers_prototype_flag);
+    return PTCL_FLAGS_HAS(flags, ptcl_stat_mods_const_flag);
 }
 
-static bool ptcl_statement_modifiers_flags_static(const ptcl_statement_modifiers flags)
+static bool ptcl_stat_mods_is_flags_auto(const ptcl_stat_mods flags)
 {
-    return ptcl_statement_modifiers_flags_has(flags, ptcl_statement_modifiers_static_flag);
+    return PTCL_FLAGS_HAS(flags, ptcl_stat_mods_auto_flag);
 }
 
-static bool ptcl_statement_modifiers_flags_global(const ptcl_statement_modifiers flags)
+static bool ptcl_stat_mods_is_flags_optional(const ptcl_stat_mods flags)
 {
-    return ptcl_statement_modifiers_flags_has(flags, ptcl_statement_modifiers_global_flag);
+    return PTCL_FLAGS_HAS(flags, ptcl_stat_mods_optional_flag);
 }
 
-static bool ptcl_statement_modifiers_flags_const(const ptcl_statement_modifiers flags)
+static bool ptcl_stat_mods_is_flags_injection(const ptcl_stat_mods flags)
 {
-    return ptcl_statement_modifiers_flags_has(flags, ptcl_statement_modifiers_const_flag);
+    return PTCL_FLAGS_HAS(flags, ptcl_stat_mods_injection_flag);
 }
 
-static bool ptcl_statement_modifiers_flags_auto(const ptcl_statement_modifiers flags)
+static ptcl_stat_mods ptcl_stat_mods_none()
 {
-    return ptcl_statement_modifiers_flags_has(flags, ptcl_statement_modifiers_auto_flag);
-}
-
-static bool ptcl_statement_modifiers_flags_optional(const ptcl_statement_modifiers flags)
-{
-    return ptcl_statement_modifiers_flags_has(flags, ptcl_statement_modifiers_optional_flag);
-}
-
-static bool ptcl_statement_modifiers_flags_injection(const ptcl_statement_modifiers flags)
-{
-    return ptcl_statement_modifiers_flags_has(flags, ptcl_statement_modifiers_injection_flag);
-}
-
-static ptcl_statement_modifiers ptcl_statement_modifiers_none()
-{
-    return ptcl_statement_modifiers_none_flag;
+    return ptcl_stat_mods_none_flag;
 }
 
 typedef enum ptcl_value_type
@@ -230,22 +216,28 @@ typedef struct ptcl_identifier
 
 typedef struct ptcl_type_pointer
 {
-    ptcl_type *target;
+    const ptcl_type *target;
+    size_t count;   
     bool is_any;
     // TODO: make own null pointer type instead of it
     bool is_null;
     bool is_const;
+    bool needs_free;
 } ptcl_type_pointer;
 
 typedef struct ptcl_type_array
 {
-    ptcl_type *target;
-    size_t count;
+    const ptcl_type *target;
+    size_t capacity;
+    ptrdiff_t count;
+    bool is_const;
+    bool needs_free;
 } ptcl_type_array;
 
 typedef struct ptcl_type_object_type
 {
-    ptcl_type *target;
+    const ptcl_type *target;
+    bool needs_free;
 } ptcl_type_object_type;
 
 typedef struct ptcl_type_comp_type
@@ -290,7 +282,6 @@ typedef struct ptcl_type
     };
 
     ptcl_value_type type;
-    bool is_primitive;
     bool is_static;
     bool is_const;
 } ptcl_type;
@@ -338,66 +329,69 @@ static ptcl_name ptcl_name_empty = {
 
 static ptcl_type ptcl_type_any = {
     .type = ptcl_value_any_type,
-    .is_primitive = true,
     .is_static = false,
     .is_const = false};
 
 static ptcl_type ptcl_type_any_pointer = {
     .type = ptcl_value_pointer_type,
-    .pointer = {.is_any = true, .is_null = false, .target = NULL},
-    .is_primitive = true,
+    .pointer = {
+        .target = NULL,
+        .count = -1,
+        .is_any = true,
+        .is_null = false,
+        .is_const = false,
+        .needs_free = false},
     .is_static = false,
     .is_const = false};
 
 static ptcl_type ptcl_type_any_type = {
     .type = ptcl_value_object_type_type,
-    .object_type = {.target = &ptcl_type_any},
-    .is_primitive = true,
+    .object_type = {
+        .target = &ptcl_type_any},
     .is_static = false,
     .is_const = false};
 
 static ptcl_type const ptcl_type_word = {
     .type = ptcl_value_word_type,
-    .is_primitive = true,
     .is_static = true,
     .is_const = false};
 
 static ptcl_type ptcl_type_character = {
     .type = ptcl_value_character_type,
-    .is_primitive = true,
     .is_static = false,
     .is_const = false};
 
 static ptcl_type ptcl_type_double = {
     .type = ptcl_value_double_type,
-    .is_primitive = true,
     .is_static = false,
     .is_const = false};
 
 static ptcl_type ptcl_type_float = {
     .type = ptcl_value_float_type,
-    .is_primitive = true,
     .is_static = false,
     .is_const = false};
 
 static ptcl_type ptcl_type_integer = {
     .type = ptcl_value_integer_type,
-    .is_primitive = true,
     .is_static = false,
     .is_const = false};
 
 static ptcl_type ptcl_type_void = {
     .type = ptcl_value_void_type,
-    .is_primitive = true,
     .is_static = false,
     .is_const = false};
 
 static ptcl_type ptcl_type_null = {
     .type = ptcl_value_pointer_type,
-    .is_primitive = true,
+    .pointer = {
+        .target = NULL,
+        .count = -1,
+        .is_any = false,
+        .is_null = true,
+        .is_const = false,
+        .needs_free = false},
     .is_static = true,
-    .is_const = false,
-    .pointer = {.is_any = false, .is_null = true, .target = NULL}};
+    .is_const = false};
 
 typedef struct ptcl_expression_variable
 {
@@ -480,7 +474,7 @@ typedef struct ptcl_statement_func_decl
     ptcl_type return_type;
     ptcl_argument* arguments;
     size_t count;
-    ptcl_statement_modifiers modifiers;
+    ptcl_stat_mods modifiers;
     ptcl_func_body* root;
     ptcl_func_body* func_body;
     size_t index;
@@ -561,7 +555,7 @@ typedef struct ptcl_expression
 
 typedef struct ptcl_statement_typedata_decl
 {
-    ptcl_statement_modifiers modifiers;
+    ptcl_stat_mods modifiers;
     ptcl_name name;
     ptcl_argument *members;
     size_t count;
@@ -577,7 +571,7 @@ typedef struct ptcl_type_member
 
 typedef struct ptcl_statement_type_decl
 {
-    ptcl_statement_modifiers modifiers;
+    ptcl_stat_mods modifiers;
     ptcl_name name;
     ptcl_type_member *types;
     size_t types_count;
@@ -587,7 +581,7 @@ typedef struct ptcl_statement_type_decl
 
 typedef struct ptcl_statement_assign
 {
-    ptcl_statement_modifiers modifiers;
+    ptcl_stat_mods modifiers;
     ptcl_identifier identifier;
     ptcl_type type;
     bool with_type;
@@ -641,7 +635,7 @@ static void ptcl_statement_destroy(
     ptcl_statement *const statement);
 static void ptcl_expression_destroy(
     ptcl_expression *const expression);
-static void ptcl_expression_inside_destroy(
+static void ptcl_expression_deep_destroy(
     ptcl_expression *const expression);
 static bool ptcl_type_is_castable(
     const ptcl_type *const expected,
@@ -649,7 +643,7 @@ static bool ptcl_type_is_castable(
 static bool ptcl_type_equals(
     const ptcl_type *const left,
     const ptcl_type *const right);
-static ptcl_name ptcl_name_create_fast_w(
+static ptcl_name ptcl_name_create_fast(
     char *value,
     bool is_anonymous);
 static void ptcl_type_destroy(
@@ -710,7 +704,7 @@ static ptcl_argument ptcl_argument_create_variadic(
     bool is_static)
 {
     return (ptcl_argument){
-        .name = ptcl_name_create_fast_w("...", false),
+        .name = ptcl_name_create_fast("...", false),
         .type = ptcl_type_any,
         .type.is_static = is_static,
         .default_value = NULL,
@@ -736,11 +730,27 @@ static ptcl_attribute ptcl_attribute_create(
         .name = *name};
 }
 
-static ptcl_name *ptcl_name_create_next(
-    const ptcl_name *const name)
+static ptcl_name ptcl_name_create(
+    char* value,
+    bool needs_free,
+    bool is_anonymous,
+    ptcl_name* next,
+    bool next_needs_free)
+{
+    return (ptcl_name) {
+        .value = value,
+            .needs_free = needs_free,
+            .is_anonymous = is_anonymous,
+            .next = next,
+            .next_needs_free = next_needs_free
+    };
+}
+
+static ptcl_name* ptcl_name_create_as_next(
+    const ptcl_name* const name)
 {
     PTCL_VALIDATE_COND(name != NULL);
-    ptcl_name *next = malloc(sizeof(ptcl_name));
+    ptcl_name* next = malloc(sizeof(ptcl_name));
     if (next == NULL)
     {
         return NULL;
@@ -750,71 +760,94 @@ static ptcl_name *ptcl_name_create_next(
     return next;
 }
 
-static ptcl_name ptcl_name_create(
+static ptcl_name ptcl_name_create_basic_with_next(
+    char* value,
+    bool needs_free,
+    ptcl_name *next,
+    bool needs_next_free)
+{
+    return ptcl_name_create(value, needs_free, false, next, needs_next_free);
+}
+
+static ptcl_name ptcl_name_create_basic(
     char *value,
     bool needs_free)
 {
-    return (ptcl_name){
-        .value = value,
-        .is_anonymous = false,
-        .needs_free = needs_free,
-        .next_needs_free = false,
-        .next = NULL};
+    return ptcl_name_create_basic_with_next(value, needs_free, NULL, false);
 }
 
-static ptcl_name ptcl_name_create_copy(
-    ptcl_name *const name)
-{
-    PTCL_VALIDATE_COND(name != NULL);
-    return (ptcl_name){
-        .value = name->value,
-        .is_anonymous = name->is_anonymous,
-        .needs_free = false,
-        .next_needs_free = false,
-        .next = name->next};
-}
-
-static void ptcl_name_make_copy(ptcl_name *const name)
-{
-    PTCL_VALIDATE_COND(name != NULL);
-    name->needs_free = false;
-    name->next_needs_free = false;
-}
-
-static ptcl_name ptcl_anonymous_name_create(
-    char *value,
+static ptcl_name ptcl_name_create_anonymous(
+    char* value,
     bool needs_free)
 {
-    return (ptcl_name){
-        .value = value,
-        .is_anonymous = true,
-        .needs_free = needs_free,
-        .next_needs_free = false,
-        .next = NULL};
+    return ptcl_name_create(value, needs_free, true, NULL, false);
 }
 
-static ptcl_name ptcl_name_create_l(
+static ptcl_name ptcl_name_create_optional(
     char *value,
     bool is_anonymous,
     bool needs_free)
 {
-    return (ptcl_name){
-        .value = value,
-        .is_anonymous = is_anonymous,
-        .needs_free = needs_free,
-        .next_needs_free = false,
-        .next = NULL};
+    return ptcl_name_create(value, needs_free, is_anonymous, NULL, false);
 }
 
-static ptcl_name ptcl_name_create_fast_w(
+static ptcl_name ptcl_name_create_fast(
     char *value, bool is_anonymous)
 {
-    return (ptcl_name){
-        .value = value,
-        .is_anonymous = is_anonymous,
-        .needs_free = false,
-        .next_needs_free = false,
-        .next = NULL};
+    return ptcl_name_create(value, false, is_anonymous, NULL, false);
+}
+
+static ptcl_name ptcl_name_create_shallow_copy(
+    ptcl_name* const name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    return ptcl_name_create(name->value, false, name->is_anonymous, name->next, false);
+}
+
+static bool ptcl_name_create_deep_copy(
+    ptcl_name* const name,
+    ptcl_name* const out)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    if (out == NULL)
+    {
+        return false;
+    }
+
+    char* value = ptcl_string_duplicate(name->value);
+    if (name->value != NULL && value == NULL)
+    {
+        return false;
+    }
+
+    ptcl_name* next = NULL;
+    const bool needs_next_free = name->next != NULL;
+    if (needs_next_free)
+    {
+        next = malloc(sizeof(ptcl_name));
+        if (next == NULL)
+        {
+        cleanup:
+            free(value);
+            return false;
+        }
+
+        if (!ptcl_name_create_deep_copy(name->next, next))
+        {
+            free(next);
+            goto cleanup;
+        }
+    }
+
+    *out = ptcl_name_create(value, true, name->is_anonymous, next, needs_next_free);
+    return true;
+}
+
+static void ptcl_name_make_immutable(ptcl_name* const name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    name->needs_free = false;
+    name->next_needs_free = false;
 }
 
 static ptcl_identifier ptcl_identifier_create_by_name(
@@ -839,18 +872,16 @@ static ptcl_identifier ptcl_identifier_create_by_str(
 {
     return (ptcl_identifier){
         .is_name = true,
-        .name = ptcl_name_create_fast_w(value, false)};
+        .name = ptcl_name_create_fast(value, false)};
 }
 
 static ptcl_type ptcl_type_create_base(
     ptcl_value_type type,
-    bool is_primitive,
     bool is_const,
     bool is_static)
 {
     return (ptcl_type){
         .type = type,
-        .is_primitive = is_primitive,
         .is_const = is_const,
         .is_static = is_static};
 }
@@ -873,43 +904,51 @@ static ptcl_type ptcl_type_create_typedata(
     ptcl_type_typedata *typedata,
     bool is_const)
 {
-    ptcl_type base = ptcl_type_create_base(ptcl_value_typedata_type, true, is_const, false);
+    ptcl_type base = ptcl_type_create_base(ptcl_value_typedata_type, is_const, false);
     base.typedata = typedata;
     return base;
 }
 
-static ptcl_type ptcl_type_create_array(
-    ptcl_type *type,
+static ptcl_type ptcl_type_create_object_type(
+    const ptcl_type *type,
     bool is_const,
-    size_t count)
+    bool needs_free)
 {
-    ptcl_type base = ptcl_type_create_base(ptcl_value_array_type, true, is_const, true);
-    base.array = (ptcl_type_array){
-        .target = type,
-        .count = count};
+    ptcl_type base = ptcl_type_create_base(ptcl_value_object_type_type, is_const, false);
+    base.object_type.target = type;
+    base.object_type.needs_free = needs_free;
     return base;
 }
 
-static ptcl_type ptcl_type_create_object_type(
-    ptcl_type *type,
-    bool is_const)
+static ptcl_type ptcl_type_create_array(
+    const ptcl_type* type,
+    ptrdiff_t count,
+    bool is_const,
+    bool is_static,
+    bool needs_free)
 {
-    ptcl_type base = ptcl_type_create_base(ptcl_value_object_type_type, true, is_const, false);
-    base.object_type.target = type;
+    ptcl_type base = ptcl_type_create_base(ptcl_value_array_type, is_const, is_static);
+    base.array = (ptcl_type_array){
+        .target = type,
+        .count = count,
+        .is_const = false,
+        .needs_free = needs_free};
     return base;
 }
 
 static ptcl_type ptcl_type_create_pointer(
-    ptcl_type *type,
-    bool is_const)
+    const ptcl_type *target,
+    bool is_const,
+    bool is_static,
+    bool needs_free)
 {
-    ptcl_type base = ptcl_type_create_base(ptcl_value_pointer_type, true, is_const, type->is_static);
+    ptcl_type base = ptcl_type_create_base(ptcl_value_pointer_type, is_const, is_static);
     base.pointer = (ptcl_type_pointer){
-        .target = type,
+        .target = target,
         .is_any = false,
         .is_null = false,
-        .is_const = is_const};
-    base.pointer.target->is_static = false;
+        .is_const = is_const,
+        .needs_free = needs_free};
     return base;
 }
 
@@ -919,12 +958,12 @@ static ptcl_type_comp_type ptcl_type_create_comp_type(
 {
     PTCL_VALIDATE_COND(type_decl != NULL);
     return (ptcl_type_comp_type){
-        .identifier = ptcl_name_create_fast_w(type_decl->name.value, false),
+        .identifier = ptcl_name_create_fast(type_decl->name.value, false),
         .types = type_decl->types,
         .count = type_decl->types_count,
         .functions = type_decl->functions,
         .is_static = is_static,
-        .is_optional = ptcl_statement_modifiers_flags_optional(type_decl->modifiers),
+        .is_optional = ptcl_stat_mods_is_flags_optional(type_decl->modifiers),
         .is_any = false};
 }
 
@@ -945,7 +984,7 @@ static ptcl_type ptcl_type_create_comp_type_t(
     ptcl_type_comp_type *type,
     bool is_const)
 {
-    ptcl_type base = ptcl_type_create_base(ptcl_value_type_type, true, is_const, false);
+    ptcl_type base = ptcl_type_create_base(ptcl_value_type_type, is_const, false);
     base.comp_type = type;
     return base;
 }
@@ -1042,7 +1081,7 @@ static ptcl_statement_loop ptcl_statement_loop_create(
 }
 
 static ptcl_statement_func_decl ptcl_statement_func_decl_create(
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     ptcl_func_body *root,
     const ptcl_name *const identifier,
     ptcl_argument *arguments,
@@ -1124,7 +1163,7 @@ static ptcl_expression *ptcl_expression_create_characters(
     size_t count,
     ptcl_location location)
 {
-    ptcl_type array_type = ptcl_type_create_array(&ptcl_type_character, false, count);
+    ptcl_type array_type = ptcl_type_create_array(&ptcl_type_character, count, false, true, false);
     ptcl_expression *expression = ptcl_expression_create(ptcl_expression_array_type, &array_type, location);
     if (expression != NULL)
     {
@@ -1203,7 +1242,7 @@ static ptcl_type_member ptcl_type_member_create(
 }
 
 static ptcl_statement_type_decl ptcl_statement_type_decl_create(
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     const ptcl_name *const name,
     ptcl_type_member *types,
     size_t types_count,
@@ -1282,7 +1321,7 @@ static bool ptcl_value_type_is_name(
     }
 }
 
-static ptcl_type *ptcl_type_get_target(
+static const ptcl_type *ptcl_type_get_target(
     const ptcl_type *const type)
 {
     PTCL_VALIDATE_COND(type != NULL);
@@ -1326,7 +1365,6 @@ static ptcl_type ptcl_type_create_func_from_decl(
     PTCL_VALIDATE_COND(func_decl != NULL);
     return (ptcl_type){
         .type = ptcl_value_function_pointer_type,
-        .is_primitive = true,
         .is_static = false,
         .function_pointer.return_type = return_type,
         .function_pointer.arguments = func_decl->arguments,
@@ -1344,7 +1382,6 @@ static ptcl_type ptcl_type_create_func(
 {
     return (ptcl_type){
         .type = ptcl_value_function_pointer_type,
-        .is_primitive = true,
         .is_static = false,
         .function_pointer.return_type = return_type,
         .function_pointer.arguments = arguments,
@@ -1605,7 +1642,7 @@ static ptcl_expression *ptcl_expression_create_integer(
 }
 
 static ptcl_statement_assign ptcl_statement_assign_create(
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     const ptcl_identifier *const identifier,
     const ptcl_type *const type,
     bool with_type,
@@ -1632,7 +1669,7 @@ static ptcl_statement_return ptcl_statement_return_create(
 }
 
 static ptcl_statement_typedata_decl ptcl_statement_typedata_decl_create(
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     const ptcl_name *const name,
     ptcl_argument *members,
     size_t count,
@@ -1876,23 +1913,36 @@ static bool ptcl_type_is_castable_to_unstatic(
     }
 }
 
-static bool ptcl_type_is_castable(
-    const ptcl_type *const expected,
-    const ptcl_type *const target)
-{
-    PTCL_VALIDATE_COND(expected != NULL && target != NULL);
-    if ((expected->is_static && !target->is_static) || (!expected->is_const && target->is_const))
+static bool ptcl_type_modifiers_equal(const ptcl_type* a, const ptcl_type* b) {
+    return a->is_static == b->is_static
+        && a->is_const == b->is_const;
+}
+
+static bool ptcl_type_modifiers_castable(const ptcl_type* expected,
+    const ptcl_type* target) {
+    if ((expected->is_static && !target->is_static) ||
+        (!expected->is_const && target->is_const)) 
     {
         return false;
     }
 
-    if (!expected->is_static && target->is_static && !ptcl_type_is_castable_to_unstatic(target))
+    if (!expected->is_static && target->is_static &&
+        !ptcl_type_is_castable_to_unstatic(target)) 
     {
         return false;
     }
 
-    if (expected->type == ptcl_value_any_type)
+    return true;
+}
+
+static bool ptcl_type_inner_is_castable(const ptcl_type* expected,
+    const ptcl_type* target);
+
+static bool ptcl_type_structure_is_castable(const ptcl_type* expected,
+    const ptcl_type* target) {
+    if (expected->type == ptcl_value_any_type) 
     {
+        // any type is already checked
         if (expected->is_static)
         {
             return target->is_static;
@@ -1901,19 +1951,22 @@ static bool ptcl_type_is_castable(
         return true;
     }
 
-    if (target->type == ptcl_value_function_pointer_type && !expected->is_static && (target->is_static && !target->function_pointer.is_static_by_declaration))
+    if (target->type == ptcl_value_function_pointer_type &&
+        !expected->is_static &&
+        (target->is_static && !target->function_pointer.is_static_by_declaration)) 
     {
         return false;
     }
 
-    if (expected->type == ptcl_value_type_type)
-    {
-        if (target->type != ptcl_value_type_type || !ptcl_name_compare(&expected->comp_type->identifier, &target->comp_type->identifier))
+    if (expected->type == ptcl_value_type_type) {
+        if (target->type != ptcl_value_type_type ||
+            !ptcl_name_compare(&expected->comp_type->identifier,
+                &target->comp_type->identifier))
         {
             return ptcl_comp_type_equals(expected->comp_type, target, true);
         }
 
-        if (expected->comp_type->is_static && !target->comp_type->is_static)
+        if (expected->comp_type->is_static && !target->comp_type->is_static) 
         {
             return false;
         }
@@ -1921,17 +1974,22 @@ static bool ptcl_type_is_castable(
         return true;
     }
 
-    if (expected->type != target->type)
+    if (expected->type != target->type) 
     {
-        if (expected->type == ptcl_value_pointer_type && target->type == ptcl_value_array_type)
+        if (expected->type == ptcl_value_pointer_type &&
+            target->type == ptcl_value_array_type) 
         {
-            return ptcl_type_is_castable(expected->pointer.target, target->array.target);
+            return ptcl_type_inner_is_castable(expected->pointer.target,
+                target->array.target);
         }
-        else if (target->type == ptcl_value_type_type && target->comp_type->is_optional)
+        else if (target->type == ptcl_value_type_type &&
+            target->comp_type->is_optional)
         {
             return ptcl_comp_type_equals(target->comp_type, expected, false);
         }
-        else if (expected->type == ptcl_value_function_pointer_type && target->type == ptcl_value_pointer_type && target->pointer.is_null)
+        else if (expected->type == ptcl_value_function_pointer_type &&
+            target->type == ptcl_value_pointer_type &&
+            target->pointer.is_null)
         {
             return true;
         }
@@ -1939,21 +1997,35 @@ static bool ptcl_type_is_castable(
         return false;
     }
 
-    switch (expected->type)
+    switch (expected->type) 
     {
     case ptcl_value_pointer_type:
-        if (expected->pointer.is_any || target->pointer.is_null)
+        if (expected->pointer.is_any || target->pointer.is_null) 
         {
             return true;
         }
 
-        return ptcl_type_is_castable(expected->pointer.target, target->pointer.target);
+        if ((!expected->pointer.is_const && target->pointer.is_const) || expected->pointer.count != target->pointer.count) 
+        {
+            return false;
+        }
+
+        return ptcl_type_structure_is_castable(expected->pointer.target,
+            target->pointer.target);
     case ptcl_value_array_type:
-        return ptcl_type_is_castable(expected->array.target, target->array.target);
+        if ((!expected->array.is_const && target->array.is_const) || expected->array.count != target->array.count)
+        {
+            return false;
+        }
+
+        return ptcl_type_structure_is_castable(expected->array.target,
+            target->array.target);
     case ptcl_value_object_type_type:
-        return ptcl_type_is_castable(expected->object_type.target, target->object_type.target);
+        return ptcl_type_inner_is_castable(expected->object_type.target,
+            target->object_type.target);
     case ptcl_value_typedata_type:
-        return ptcl_name_compare(&expected->typedata->identifier, &target->typedata->identifier);
+        return ptcl_name_compare(&expected->typedata->identifier,
+            &target->typedata->identifier);
     case ptcl_value_word_type:
     case ptcl_value_character_type:
     case ptcl_value_double_type:
@@ -1962,22 +2034,23 @@ static bool ptcl_type_is_castable(
     case ptcl_value_void_type:
         return true;
     case ptcl_value_function_pointer_type:
+    {
         if (expected->function_pointer.count != target->function_pointer.count)
         {
             return false;
         }
 
-        const bool is_castable_return = ptcl_type_is_castable(expected->function_pointer.return_type, target->function_pointer.return_type);
-        if (!is_castable_return)
+        if (!ptcl_type_is_castable(
+            expected->function_pointer.return_type,
+            target->function_pointer.return_type)) 
         {
             return false;
         }
 
-        for (size_t i = 0; i < expected->function_pointer.count; i++)
+        for (size_t i = 0; i < expected->function_pointer.count; i++) 
         {
-            ptcl_argument *left = &expected->function_pointer.arguments[i];
-            ptcl_argument *right = &target->function_pointer.arguments[i];
-            // Compiler will optimize it
+            ptcl_argument* left = &expected->function_pointer.arguments[i];
+            ptcl_argument* right = &target->function_pointer.arguments[i];
             if (expected->is_static)
             {
                 if (!ptcl_name_compare(&left->name, &right->name))
@@ -1986,16 +2059,41 @@ static bool ptcl_type_is_castable(
                 }
             }
 
-            if (!ptcl_type_equals(&left->type, &right->type))
+            if (!ptcl_type_equals(&left->type, &right->type)) 
             {
                 return false;
             }
         }
-
         return true;
+    }
     default:
         return true;
     }
+}
+
+static bool ptcl_type_inner_is_castable(
+    const ptcl_type* expected,
+    const ptcl_type* target) 
+{
+    if (!ptcl_type_modifiers_equal(expected, target)) 
+    {
+        return false;
+    }
+
+    return ptcl_type_structure_is_castable(expected, target);
+}
+
+static bool ptcl_type_is_castable(
+    const ptcl_type* const expected,
+    const ptcl_type* const target) 
+{
+    PTCL_VALIDATE_COND(expected != NULL && target != NULL);
+    if (!ptcl_type_modifiers_castable(expected, target)) 
+    {
+        return false;
+    }
+
+    return ptcl_type_structure_is_castable(expected, target);
 }
 
 static ptcl_expression *ptcl_expression_cast_to_double(
@@ -2153,44 +2251,66 @@ static ptcl_type ptcl_type_copy(
     ptcl_type copy = *type;
     switch (type->type)
     {
+    case ptcl_value_array_type:
+        if (type->array.target != NULL)
+        {
+            ptcl_type* target_copy = malloc(sizeof(ptcl_type));
+            *is_out_of_memory = target_copy == NULL;
+            if (!*is_out_of_memory)
+            {
+                *target_copy = ptcl_type_copy(type->array.target, is_out_of_memory);
+                if (*is_out_of_memory)
+                {
+                    free(target_copy);
+                    break;
+                }
+
+                copy.array.target = target_copy;
+                copy.array.needs_free = true;
+            }
+        }
+
+        copy.array.count = type->array.count;
+        break;    
+    case ptcl_value_pointer_type:
+            if (type->pointer.target != NULL)
+            {
+                ptcl_type* target_copy = malloc(sizeof(ptcl_type));
+                *is_out_of_memory = target_copy == NULL;
+                if (!*is_out_of_memory)
+                {
+                    *target_copy = ptcl_type_copy(type->pointer.target, is_out_of_memory);
+                    if (*is_out_of_memory)
+                    {
+                        free(target_copy);
+                        break;
+                    }
+
+                    copy.pointer.target = target_copy;
+                    copy.pointer.needs_free = true;
+                }
+            }
+
+            copy.pointer.is_any = type->pointer.is_any;
+            break;
     case ptcl_value_object_type_type:
         if (type->object_type.target != NULL)
         {
-            copy.object_type.target = malloc(sizeof(ptcl_type));
-            *is_out_of_memory = copy.object_type.target == NULL;
+            ptcl_type* target_copy = malloc(sizeof(ptcl_type));
+            *is_out_of_memory = target_copy == NULL;
             if (!*is_out_of_memory)
             {
-                *copy.object_type.target = ptcl_type_copy(type->object_type.target, is_out_of_memory);
+                *target_copy = ptcl_type_copy(type->object_type.target, is_out_of_memory);
                 if (*is_out_of_memory)
                 {
-                    free(copy.object_type.target);
+                    free(target_copy);
                     break;
                 }
 
-                copy.object_type.target->is_primitive = false;
+                copy.object_type.target = target_copy;
             }
         }
 
-        break;
-    case ptcl_value_pointer_type:
-        if (type->pointer.target != NULL)
-        {
-            copy.pointer.target = malloc(sizeof(ptcl_type));
-            *is_out_of_memory = copy.pointer.target == NULL;
-            if (!*is_out_of_memory)
-            {
-                *copy.pointer.target = ptcl_type_copy(type->pointer.target, is_out_of_memory);
-                if (*is_out_of_memory)
-                {
-                    free(copy.pointer.target);
-                    break;
-                }
-
-                copy.pointer.target->is_primitive = false;
-            }
-        }
-
-        copy.pointer.is_any = type->pointer.is_any;
         break;
     case ptcl_value_function_pointer_type:
     {
@@ -2205,7 +2325,6 @@ static ptcl_type ptcl_type_copy(
                 break;
             }
 
-            return_type->is_primitive = false;
             ptcl_argument *arguments = malloc(type->function_pointer.count * sizeof(ptcl_argument));
             if (arguments == NULL && type->function_pointer.count > 0)
             {
@@ -2224,7 +2343,7 @@ static ptcl_type ptcl_type_copy(
                 else
                 {
                     ptcl_type argument_type = ptcl_type_copy(&type->function_pointer.arguments[i].type, is_out_of_memory);
-                    ptcl_name argument_name = ptcl_name_create_fast_w(NULL, false);
+                    ptcl_name argument_name = ptcl_name_create_fast(NULL, false);
                     arguments[i] = ptcl_argument_create(&argument_type, &argument_name);
                     if (*is_out_of_memory)
                     {
@@ -2247,26 +2366,6 @@ static ptcl_type ptcl_type_copy(
 
         break;
     }
-    case ptcl_value_array_type:
-        if (type->array.target != NULL)
-        {
-            copy.array.target = malloc(sizeof(ptcl_type));
-            *is_out_of_memory = copy.array.target == NULL;
-            if (!*is_out_of_memory)
-            {
-                *copy.array.target = ptcl_type_copy(type->array.target, is_out_of_memory);
-                if (*is_out_of_memory)
-                {
-                    free(copy.array.target);
-                    break;
-                }
-
-                copy.array.target->is_primitive = false;
-            }
-        }
-
-        copy.array.count = type->array.count;
-        break;
     case ptcl_value_typedata_type:
     case ptcl_value_word_type:
     case ptcl_value_character_type:
@@ -2753,7 +2852,7 @@ static inline ptcl_expression *ptcl_expression_binary_static_evaluate(
 
     if (condition >= 0)
     {
-        ptcl_expression_inside_destroy(result);
+        ptcl_expression_deep_destroy(result);
         result->type = ptcl_expression_integer_type;
         result->return_type = ptcl_type_integer;
         result->return_type.is_static = true;
@@ -2801,7 +2900,7 @@ static inline ptcl_expression *ptcl_expression_binary_static_evaluate(
 
     left->location = location;
     left->with_type = false;
-    ptcl_expression_inside_destroy(left);
+    ptcl_expression_deep_destroy(left);
     switch (type)
     {
     case ptcl_binary_operator_plus_type:
@@ -3339,6 +3438,9 @@ static bool ptcl_type_is_function(
     return false;
 }
 
+#pragma warning(push)
+#pragma warning(disable: 4090)
+
 static void ptcl_type_destroy(
     ptcl_type *const type)
 {
@@ -3346,7 +3448,7 @@ static void ptcl_type_destroy(
     switch (type->type)
     {
     case ptcl_value_pointer_type:
-        if (type->pointer.target != NULL && !type->array.target->is_primitive)
+        if (type->pointer.target != NULL && type->pointer.needs_free)
         {
             ptcl_type_destroy(type->pointer.target);
             free(type->pointer.target);
@@ -3355,7 +3457,7 @@ static void ptcl_type_destroy(
 
         break;
     case ptcl_value_array_type:
-        if (type->array.target != NULL && !type->array.target->is_primitive)
+        if (type->array.target != NULL && type->array.needs_free)
         {
             ptcl_type_destroy(type->array.target);
             free(type->array.target);
@@ -3364,7 +3466,7 @@ static void ptcl_type_destroy(
 
         break;
     case ptcl_value_object_type_type:
-        if (type->object_type.target != NULL && !type->array.target->is_primitive)
+        if (type->object_type.target != NULL && type->object_type.needs_free)
         {
             ptcl_type_destroy(type->object_type.target);
             free(type->object_type.target);
@@ -3373,12 +3475,8 @@ static void ptcl_type_destroy(
 
         break;
     case ptcl_value_function_pointer_type:
-        if (!type->function_pointer.return_type->is_primitive)
-        {
-            ptcl_type_destroy(type->function_pointer.return_type);
-            free(type->function_pointer.return_type);
-        }
-
+        ptcl_type_destroy(type->function_pointer.return_type);
+        free(type->function_pointer.return_type);
         for (size_t i = 0; i < type->function_pointer.count; i++)
         {
             ptcl_type_destroy(&type->function_pointer.arguments[i].type);
@@ -3400,6 +3498,8 @@ static void ptcl_type_destroy(
         break;
     }
 }
+
+#pragma warning(pop)
 
 static void ptcl_identifier_destroy(
     ptcl_identifier *const identifier)
@@ -3450,7 +3550,7 @@ static void ptcl_statement_func_decl_destroy(
     PTCL_VALIDATE_COND(func_decl != NULL);
     ptcl_name_destroy(&func_decl->identifier);
     ptcl_type_destroy(&func_decl->return_type);
-    if (!ptcl_statement_modifiers_flags_prototype(func_decl->modifiers) && func_decl->func_body != NULL)
+    if (!ptcl_stat_mods_is_flags_prototype(func_decl->modifiers) && func_decl->func_body != NULL)
     {
         ptcl_func_body_destroy(func_decl->func_body);
         // no free always cuz maybe garbage
@@ -3620,24 +3720,31 @@ static void ptcl_expression_array_destroy(
     free(array->expressions);
 }
 
-static void ptcl_expression_inside_destroy(
-    ptcl_expression *const expression)
+static void ptcl_expression_shallow_destroy(
+    ptcl_expression* const expression,
+    bool with_type)
 {
-    if (!expression->is_original)
+    if (with_type) 
     {
-        if (expression->with_type)
+        if (!expression->is_original && expression->with_type)
         {
             ptcl_type_destroy(&expression->return_type);
         }
-
-        return;
+        else 
+        {
+            if (expression->with_type && ptcl_expression_with_own_type(expression->type))
+            {
+                ptcl_type_destroy(&expression->return_type);
+            }
+        }
     }
+    
+    free(expression);
+}
 
-    if (expression->with_type && ptcl_expression_with_own_type(expression->type))
-    {
-        ptcl_type_destroy(&expression->return_type);
-    }
-
+static void ptcl_expression_deep_destroy(
+    ptcl_expression *const expression)
+{
     switch (expression->type)
     {
     case ptcl_expression_lated_func_body_type:
@@ -3709,13 +3816,14 @@ static void ptcl_expression_inside_destroy(
     case ptcl_expression_null_type:
         break;
     }
+
 }
 
 static void ptcl_expression_destroy(
     ptcl_expression *expression)
 {
-    ptcl_expression_inside_destroy(expression);
-    free(expression);
+    ptcl_expression_deep_destroy(expression);
+    ptcl_expression_shallow_destroy(expression, true);
 }
 
 #endif // PTCL_NODE_H

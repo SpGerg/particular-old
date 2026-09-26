@@ -381,7 +381,7 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(
     }
 
     ptcl_statement_func_decl* func_decl = &function->func;
-    if (ptcl_statement_modifiers_flags_prototype(func_decl->modifiers) || func_decl->func_body == NULL)
+    if (ptcl_stat_mods_is_flags_prototype(func_decl->modifiers) || func_decl->func_body == NULL)
     {
         return NULL;
     }
@@ -397,7 +397,7 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(
         for (size_t i = 0; i < count; i++)
         {
             ptcl_parser_variable *variable = &variables[i];
-            if (variable->is_out_of_scope || variable->is_syntax_variable || !variable->is_built_in || !ptcl_func_body_can_access(variable->root, ptcl_parser_root(interpreter->parser)))
+            if (variable->is_out_of_scope || ptcl_parser_var_flags_is_syntax(variable->flags) || !ptcl_parser_var_flags_is_built_in(variable->flags) || !ptcl_func_body_can_access(variable->root, ptcl_parser_root(interpreter->parser)))
             {
                 continue;
             }

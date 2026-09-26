@@ -9,78 +9,107 @@
 #define PTCL_PARSER_MAX_MODIFIERS_RECURSION 16
 #define PTCL_PARSER_DEFAULT_INSTANCE_CAPACITY 16
 #define PTCL_PARSER_DECL_INSERT_DEPTH 16
-#define PTCL_PARSER_STATEMENT_TYPE_NAME "ptcl_statement_t"
-#define PTCL_PARSER_EXPRESSION_TYPE_NAME "ptcl_expression_t"
-#define PTCL_PARSER_TOKEN_TYPE_NAME "ptcl_token_t"
-#define PTCL_PARSER_ERROR_FUNC_NAME "ptcl_error"
+#define PTCL_PARSER_LANGUAGE_NAMESPACE_NAME "language"
+#define PTCL_PARSER_STATEMENT_TYPE_NAME "statement"
+#define PTCL_PARSER_EXPRESSION_TYPE_NAME "expression"
+#define PTCL_PARSER_TOKEN_TYPE_NAME "token"
 
-static ptcl_name const ptcl_statement_t_name = {
-    .value = PTCL_PARSER_STATEMENT_TYPE_NAME,
-    .needs_free = false,
-    .next_needs_free = false,
-    .is_anonymous = false,
-    .next = NULL};
+#define PTCL_PARSER_STATEMENTS_FUNC_NAME "statements"
+#define PTCL_PARSER_INSERT_FUNC_NAME "insert"
+#define PTCL_PARSER_ERROR_FUNC_NAME "error"
+#define PTCL_PARSER_DEFINED_FUNC_NAME "defined"
 
-static ptcl_type_comp_type ptcl_statement_comp_type = {
-    .identifier = {
-        .value = PTCL_PARSER_STATEMENT_TYPE_NAME,
-        .needs_free = false,
-        .next_needs_free = false,
-        .is_anonymous = false,
-        .next = NULL},
-    .types = NULL,
-    .count = 0,
-    .functions = NULL,
-    .is_optional = false,
-    .is_any = false};
+const ptcl_name* ptcl_get_token_t_name(void);
 
-static ptcl_name const ptcl_expression_t_name = {
-    .value = PTCL_PARSER_EXPRESSION_TYPE_NAME,
-    .needs_free = false,
-    .next_needs_free = false,
-    .is_anonymous = false,
-    .next = NULL};
+const ptcl_name* ptcl_get_statement_t_name(void);
 
-static ptcl_name const ptcl_token_t_name = {
-    .value = PTCL_PARSER_TOKEN_TYPE_NAME,
-    .needs_free = false,
-    .next_needs_free = false,
-    .is_anonymous = false,
-    .next = NULL};
+const ptcl_name* ptcl_get_expression_t_name(void);
 
-static ptcl_type_comp_type ptcl_token_comp_type = {
-    .identifier = {
-        .value = PTCL_PARSER_TOKEN_TYPE_NAME,
-        .needs_free = false,
-        .next_needs_free = false,
-        .is_anonymous = false,
-        .next = NULL},
-    .types = NULL,
-    .count = 0,
-    .functions = NULL,
-    .is_optional = false,
-    .is_any = false};
+const ptcl_name* ptcl_get_statements_func_name(void);
 
-static ptcl_name const ptcl_insert_name = {
-    .value = "ptcl_insert",
-    .needs_free = false,
-    .next_needs_free = false,
-    .is_anonymous = false,
-    .next = NULL};
+const ptcl_name* ptcl_get_defined_func_name(void);
+
+const ptcl_name* ptcl_get_error_func_name(void);
+
+const ptcl_name* ptcl_get_insert_func_name(void);
+
+const ptcl_type* ptcl_get_statement_t(void);
+
+const ptcl_type* ptcl_get_token_t(void);
+
+static bool ptcl_parser_is_language_namespace(const ptcl_name* const name) 
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    return ptcl_string_equals(name->value, PTCL_PARSER_LANGUAGE_NAMESPACE_NAME);
+}
+
+static bool ptcl_parser_is_statement_t_name(const ptcl_name* const name) 
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    if (name->next == NULL || !ptcl_parser_is_language_namespace(name))
+    {
+        return false;
+    }
+
+    return ptcl_string_equals(name->next->value, PTCL_PARSER_STATEMENT_TYPE_NAME);
+}
+
+static bool ptcl_parser_is_expression_t_name(const ptcl_name* const name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    if (name->next == NULL || !ptcl_parser_is_language_namespace(name))
+    {
+        return false;
+    }
+
+    return ptcl_string_equals(name->next->value, PTCL_PARSER_EXPRESSION_TYPE_NAME);
+}
+
+static bool ptcl_parser_is_token_t_name(const ptcl_name* const name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    if (name->next == NULL || !ptcl_parser_is_language_namespace(name))
+    {
+        return false;
+    }
+
+    return ptcl_string_equals(name->next->value, PTCL_PARSER_TOKEN_TYPE_NAME);
+}
+
+static bool ptcl_parser_is_error_name(const ptcl_name* const name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    if (name->next == NULL || !ptcl_parser_is_language_namespace(name))
+    {
+        return false;
+    }
+
+    return ptcl_string_equals(name->next->value, PTCL_PARSER_ERROR_FUNC_NAME);
+}
+
+static bool ptcl_parser_is_insert_name(const ptcl_name* const name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    if (name->next == NULL || !ptcl_parser_is_language_namespace(name))
+    {
+        return false;
+    }
+
+    return ptcl_string_equals(name->next->value, PTCL_PARSER_INSERT_FUNC_NAME);
+}
+
+static bool ptcl_parser_is_insert_str(const char* const name)
+{
+    if (name == NULL)
+    {
+        return false;
+    }
+
+    return ptcl_string_equals(name, PTCL_PARSER_INSERT_FUNC_NAME);
+}
 
 #pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
 #pragma GCC diagnostic ignored "-Wdiscarded-qualifiers"
-static ptcl_type ptcl_statement_t_type = {
-    .type = ptcl_value_type_type,
-    .is_primitive = true,
-    .is_static = true,
-    .comp_type = &ptcl_statement_comp_type};
-
-static ptcl_type ptcl_token_t_type = {
-    .type = ptcl_value_type_type,
-    .is_primitive = true,
-    .is_static = true,
-    .comp_type = &ptcl_token_comp_type};
 
 typedef enum ptcl_parser_flags
 {
@@ -118,6 +147,85 @@ typedef struct ptcl_parser_this_s_pair
 
 typedef struct ptcl_parser_function ptcl_parser_function;
 
+typedef enum ptcl_parser_var_flags
+{
+    ptcl_parser_var_none_flag = 0,
+    ptcl_parser_var_syntax_word_flag = 1 << 0,
+    ptcl_parser_var_func_ptr_flag = 1 << 1,
+    ptcl_parser_var_syntax_flag = 1 << 2,
+    ptcl_parser_var_syntax_anom_flag = 1 << 3,
+    ptcl_parser_var_used_flag = 1 << 4,
+    ptcl_parser_var_source_flag = 1 << 5,
+    ptcl_parser_var_built_in_flag = 1 << 6
+} ptcl_parser_var_flags;
+
+static bool ptcl_parser_var_flags_is_syntax_word(
+    ptcl_parser_var_flags flags)
+{
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_var_syntax_word_flag);
+}
+
+static bool ptcl_parser_var_flags_is_func_ptr(
+    ptcl_parser_var_flags flags)
+{
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_var_func_ptr_flag);
+}
+
+static bool ptcl_parser_var_flags_is_syntax(
+    ptcl_parser_var_flags flags)
+{
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_var_syntax_flag);
+}
+
+static bool ptcl_parser_var_flags_is_syntax_anom(
+    ptcl_parser_var_flags flags)
+{
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_var_syntax_anom_flag);
+}
+
+static bool ptcl_parser_var_flags_is_used(
+    ptcl_parser_var_flags flags)
+{
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_var_used_flag);
+}
+
+static bool ptcl_parser_var_flags_is_source(
+    ptcl_parser_var_flags flags)
+{
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_var_source_flag);
+}
+
+static bool ptcl_parser_var_flags_is_built_in(
+    ptcl_parser_var_flags flags)
+{
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_var_built_in_flag);
+}
+
+static ptcl_parser_var_flags ptcl_parser_var_flags_default(bool is_built_in)
+{
+    if (is_built_in)
+    {
+        return ptcl_parser_var_none_flag | ptcl_parser_var_built_in_flag;
+    }
+
+    return ptcl_parser_var_none_flag;
+}
+
+static ptcl_parser_var_flags ptcl_parser_var_flags_provider()
+{
+    return ptcl_parser_var_none_flag;
+}
+
+static ptcl_parser_var_flags ptcl_parser_var_flags_func()
+{
+    return ptcl_parser_var_func_ptr_flag;
+}
+
+static ptcl_parser_var_flags ptcl_parser_var_flags_source()
+{
+    return ptcl_parser_var_source_flag;
+}
+
 typedef struct ptcl_parser_variable
 {
     ptcl_name identifier;
@@ -125,13 +233,7 @@ typedef struct ptcl_parser_variable
     ptcl_func_body *root;
     ptcl_type type;
     ptcl_expression *built_in;
-    // TODO: use flags instead of it...
-    bool is_built_in;
-    bool is_syntax_word;
-    bool is_function_pointer;
-    bool is_syntax_variable;
-    bool is_syntax_anonymous;
-    bool is_used;
+    ptcl_parser_var_flags flags;
     bool is_out_of_scope;
 } ptcl_parser_variable;
 
@@ -250,7 +352,7 @@ typedef struct ptcl_parser_provider
 {
     ptcl_statement_type type;
     ptcl_attributes attributes;
-    ptcl_statement_modifiers modifiers;
+    ptcl_stat_mods modifiers;
     ptcl_name identifier;
     ptcl_func_body *root;
     ptcl_statement_func_decl func_decl;
@@ -293,6 +395,8 @@ typedef struct ptcl_parser_result
     size_t this_pairs_count;
     ptcl_parser_provider *providers;
     size_t providers_count;
+    ptcl_func_body** unique_pointers;
+    size_t unique_pointers_count;
     bool is_critical;
 } ptcl_parser_result;
 
@@ -301,7 +405,7 @@ typedef struct ptcl_parser_statement_info
     ptcl_statement_type type;
     ptcl_name name;
     ptcl_expression *expression;
-    ptcl_statement_modifiers modifiers;
+    ptcl_stat_mods modifiers;
 } ptcl_parser_statement_info;
 
 typedef struct ptcl_parser_assign_dot_data
@@ -314,100 +418,55 @@ typedef struct ptcl_parser_assign_dot_data
 } ptcl_parser_assign_dot_data;
 
 // TODO: expression -> expr with all other stuff with that
-typedef enum ptcl_parser_expression_flags
+typedef enum ptcl_parser_expr_flags
 {
-    ptcl_parser_expression_none_flag = 0,
-    ptcl_parser_expression_with_word_flag = 1 << 0,
-    ptcl_parser_expression_only_value_flag = 1 << 1,
-    ptcl_parser_expression_require_expression_flag = 1 << 2,
-    ptcl_parser_expression_change_the_value_flag = 1 << 3,
-    ptcl_parser_expression_ignore_excepted_flag = 1 << 4
-} ptcl_parser_expression_flags;
+    ptcl_parser_expr_none_flag = 0,
+    ptcl_parser_expr_with_word_flag = 1 << 0,
+    ptcl_parser_expr_only_value_flag = 1 << 1,
+    ptcl_parser_expr_require_expression_flag = 1 << 2,
+    ptcl_parser_expr_change_the_value_flag = 1 << 3,
+    ptcl_parser_expr_ignore_excepted_flag = 1 << 4
+} ptcl_parser_expr_flags;
 
-static bool ptcl_parser_expression_flags_has(
-    ptcl_parser_expression_flags flags,
-    ptcl_parser_expression_flags flag)
+static bool ptcl_parser_expr_flags_is_only_value(
+    ptcl_parser_expr_flags flags)
 {
-    return (flags & flag) == flag;
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_expr_only_value_flag);
 }
 
-static void ptcl_parser_expression_flags_set(
-    ptcl_parser_expression_flags *flags,
-    ptcl_parser_expression_flags flag)
+static bool ptcl_parser_expr_flags_is_change_value(
+    ptcl_parser_expr_flags flags)
 {
-    *flags |= flag;
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_expr_change_the_value_flag);
 }
 
-static void ptcl_parser_expression_flags_remove(
-    ptcl_parser_expression_flags *flags,
-    ptcl_parser_expression_flags flag)
+static bool ptcl_parser_expr_flags_is_ignore_expected(
+    ptcl_parser_expr_flags flags)
 {
-    *flags &= ~flag;
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_expr_ignore_excepted_flag);
 }
 
-static bool ptcl_parser_expression_flags_change_value(
-    ptcl_parser_expression_flags flags)
+static bool ptcl_parser_expr_flags_is_require_expr(
+    ptcl_parser_expr_flags flags)
 {
-    return ptcl_parser_expression_flags_has(flags, ptcl_parser_expression_change_the_value_flag);
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_expr_require_expression_flag);
 }
 
-static bool ptcl_parser_expression_flags_ignore_expected(
-    ptcl_parser_expression_flags flags)
+static bool ptcl_parser_expr_flags_is_with_word(
+    ptcl_parser_expr_flags flags)
 {
-    return ptcl_parser_expression_flags_has(flags, ptcl_parser_expression_ignore_excepted_flag);
+    return PTCL_FLAGS_HAS(flags, ptcl_parser_expr_with_word_flag);
 }
 
-static bool ptcl_parser_expression_flags_require_expr(
-    ptcl_parser_expression_flags flags)
-{
-    return ptcl_parser_expression_flags_has(flags, ptcl_parser_expression_require_expression_flag);
-}
-
-static ptcl_parser_expression_flags ptcl_parser_expression_flags_default(
+static ptcl_parser_expr_flags ptcl_parser_expr_flags_default(
     bool is_expression)
 {
     if (is_expression)
     {
-        return ptcl_parser_expression_with_word_flag | ptcl_parser_expression_require_expression_flag;
+        return ptcl_parser_expr_with_word_flag | ptcl_parser_expr_require_expression_flag;
     }
 
-    return ptcl_parser_expression_with_word_flag;
-}
-
-static bool ptcl_parser_flags_has(
-    ptcl_parser_flags flags,
-    ptcl_parser_flags flag)
-{
-    return (flags & flag) == flag;
-}
-
-static void ptcl_parser_flags_set(
-    ptcl_parser_flags *flags,
-    ptcl_parser_flags flag)
-{
-    *flags |= flag;
-}
-
-static void ptcl_parser_flags_remove(
-    ptcl_parser_flags *flags,
-    ptcl_parser_flags flag)
-{
-    *flags &= ~flag;
-}
-
-static void ptcl_parser_flags_set_by_bool(
-    ptcl_parser_flags *flags,
-    ptcl_parser_flags flag,
-    bool value)
-{
-    if (value)
-    {
-        ptcl_parser_flags_set(flags, flag);
-    }
-    else
-    {
-        ptcl_parser_flags_remove(flags, flag);
-    }
+    return ptcl_parser_expr_with_word_flag;
 }
 
 static ptcl_parser_flags ptcl_parser_flags_default()
@@ -428,7 +487,7 @@ static ptcl_parser_statement_info ptcl_parser_statement_info_default()
 {
     return (ptcl_parser_statement_info){
         .type = 0,
-        .modifiers = ptcl_statement_modifiers_none_flag,
+        .modifiers = ptcl_stat_mods_none_flag,
         .expression = NULL,
         .name = ptcl_name_empty};
 }
@@ -502,12 +561,24 @@ static ptcl_parser_variable ptcl_parser_variable_create(
         .is_out_of_scope = false,
         .type = *type,
         .built_in = built_in,
-        .is_built_in = is_built_in,
-        .is_syntax_word = false,
-        .is_function_pointer = false,
-        .is_syntax_variable = is_built_in,
-        .is_syntax_anonymous = false,
-        .is_used = false};
+        .flags = ptcl_parser_var_flags_default(is_built_in)};
+}
+
+static ptcl_parser_variable ptcl_parser_variable_create_source(
+    const ptcl_name* const identifier,
+    const ptcl_type* const type,
+    ptcl_expression* built_in,
+    ptcl_func_body* root)
+{
+    PTCL_VALIDATE_COND(identifier != NULL && type != NULL);
+    return (ptcl_parser_variable) {
+        .identifier = *identifier,
+            .provider_index = -1,
+            .root = root,
+            .is_out_of_scope = false,
+            .type = *type,
+            .built_in = built_in,
+            .flags = ptcl_parser_var_flags_source()};
 }
 
 static ptcl_parser_variable ptcl_parser_variable_create_provider(
@@ -516,18 +587,13 @@ static ptcl_parser_variable ptcl_parser_variable_create_provider(
     ptrdiff_t index)
 {
     PTCL_VALIDATE_COND(identifier != NULL);
-    return (ptcl_parser_variable){
+    return (ptcl_parser_variable) {
         .identifier = *identifier,
-        .provider_index = index,
-        .root = root,
-        .is_out_of_scope = false,
-        .built_in = NULL,
-        .is_built_in = false,
-        .is_syntax_word = false,
-        .is_function_pointer = false,
-        .is_syntax_variable = false,
-        .is_syntax_anonymous = false,
-        .is_used = false};
+            .provider_index = index,
+            .root = root,
+            .is_out_of_scope = false,
+            .built_in = NULL,
+            .flags = ptcl_parser_var_flags_provider()};
 }
 
 // TODO: more cool name
@@ -546,12 +612,7 @@ static ptcl_parser_variable ptcl_parser_variable_not_static_create(
         .is_out_of_scope = false,
         .type = *type,
         .built_in = built_in,
-        .is_built_in = is_built_in,
-        .is_syntax_word = false,
-        .is_function_pointer = false,
-        .is_syntax_variable = false,
-        .is_syntax_anonymous = false,
-        .is_used = false};
+        .flags = ptcl_parser_var_flags_default(is_built_in)};
 }
 
 static ptcl_parser_variable ptcl_parser_func_variable_create(
@@ -566,12 +627,7 @@ static ptcl_parser_variable ptcl_parser_func_variable_create(
         .root = root,
         .is_out_of_scope = false,
         .type = *type,
-        .is_built_in = false,
-        .is_syntax_word = false,
-        .is_function_pointer = true,
-        .is_syntax_variable = false,
-        .is_syntax_anonymous = false,
-        .is_used = false};
+        .flags = ptcl_parser_var_flags_func()};
 }
 
 static ptcl_parser_function ptcl_parser_function_create_provider(
@@ -653,7 +709,7 @@ static ptcl_parser_typedata ptcl_parser_typedata_create_provider(
 static ptcl_parser_provider ptcl_parser_provider_create(
     ptcl_statement_type type,
     const ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     const ptcl_name *const identifier,
     ptcl_func_body *root,
     ptcl_argument *arguments,
@@ -669,7 +725,7 @@ static ptcl_parser_provider ptcl_parser_provider_create(
         .attributes = *attributes,
         .identifier = *identifier,
         .root = root,
-        .func_decl = ptcl_statement_func_decl_create(ptcl_statement_modifiers_none_flag, root, identifier, arguments, arguments_count, NULL, ptcl_type_any, has_variadic, false),
+        .func_decl = ptcl_statement_func_decl_create(ptcl_stat_mods_none_flag, root, identifier, arguments, arguments_count, NULL, ptcl_type_any, has_variadic, false),
         .variants = NULL,
         .variants_capacity = 0,
         .variants_count = 0,
@@ -721,13 +777,14 @@ static ptcl_parser_syntax_node ptcl_parser_syntax_node_create_variable(
 }
 
 static ptcl_parser_syntax_node ptcl_parser_syntax_node_create_end_token(
-    char *name)
+    char *name,
+    const ptcl_type *token_type)
 {
     return (ptcl_parser_syntax_node){
         .type = ptcl_parser_syntax_node_variable_type,
         .variable = (ptcl_parser_syntax_word_variable){
             .name = name,
-            .type = ptcl_type_create_array(&ptcl_token_t_type, false, -1),
+            .type = ptcl_type_create_array(token_type, -1, false, true, false),
             .is_variadic = true}};
 }
 
@@ -874,18 +931,18 @@ static void ptcl_parser_variable_destroy(
     ptcl_parser_variable *const variable)
 {
     PTCL_VALIDATE_COND(variable != NULL);
-    if (variable->is_syntax_word)
+    if (ptcl_parser_var_flags_is_syntax_word(variable->flags))
     {
         ptcl_name_destroy(&variable->built_in->word);
         free(variable->built_in);
     }
-    else if (variable->is_function_pointer)
+    else if (ptcl_parser_var_flags_is_func_ptr(variable->flags))
     {
         free(variable->type.function_pointer.return_type);
     }
     else
     {
-        if (variable->is_built_in)
+        if (ptcl_parser_var_flags_is_built_in(variable->flags))
         {
             ptcl_expression_destroy(variable->built_in);
         }
@@ -905,6 +962,11 @@ static void ptcl_parser_tokens_state_destroy(
 static void ptcl_parser_comp_type_destroy(
     ptcl_parser_comp_type *const comp_type)
 {
+    if (ptcl_get_statement_t()->comp_type == comp_type->comp_type || ptcl_get_token_t()->comp_type == comp_type->comp_type)
+    {
+        return;
+    }
+
     PTCL_VALIDATE_COND(comp_type != NULL);
     free(comp_type->comp_type);
     free(comp_type->static_type);
@@ -945,11 +1007,15 @@ void ptcl_parser_leave_from_syntax(
 void ptcl_parser_leave_from_insert_state(
     ptcl_parser *parser);
 
-ptcl_statement_func_call ptcl_parser_func_call(
+void ptcl_parser_leave_from_extra_body(
+    ptcl_parser* parser);
+
+bool ptcl_parser_func_call(
     ptcl_parser *parser,
     ptcl_parser_function *function,
     ptcl_expression *self,
-    bool is_expression);
+    bool is_expression,
+    ptcl_statement_func_call *const out);
 
 bool ptcl_parser_func_name(
     ptcl_parser *parser,
@@ -958,7 +1024,7 @@ bool ptcl_parser_func_name(
     bool *is_constructor,
     ptcl_parser_function **prototype,
     ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers);
+    ptcl_stat_mods modifiers);
 
 bool ptcl_parser_func_body_and_storage(
     ptcl_parser *parser,
@@ -966,13 +1032,13 @@ bool ptcl_parser_func_body_and_storage(
     ptcl_statement_func_decl *decl,
     ptcl_parser_function *prototype,
     bool is_constructor,
-    ptcl_statement_modifiers modifiers);
+    ptcl_stat_mods modifiers);
 
 bool ptcl_parser_func_decl(
     ptcl_parser *parser,
     bool *is_provider,
     ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     ptcl_statement_func_decl *const out);
 
 bool ptcl_parser_typedata_name(
@@ -980,19 +1046,19 @@ bool ptcl_parser_typedata_name(
     ptcl_name *name,
     bool *is_provider,
     ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers);
+    ptcl_stat_mods modifiers);
 
 bool ptcl_parser_typedata_body_and_storage(
     ptcl_parser *parser,
     ptcl_name *const name,
     ptcl_statement_typedata_decl *decl,
-    ptcl_statement_modifiers modifiers);
+    ptcl_stat_mods modifiers);
 
 bool ptcl_parser_typedata_decl(
     ptcl_parser *parser,
     bool *is_provider,
     ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     ptcl_statement_typedata_decl *const out);
 
 bool ptcl_parser_type_name(
@@ -1000,19 +1066,19 @@ bool ptcl_parser_type_name(
     ptcl_name *name,
     bool *is_provider,
     ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers);
+    ptcl_stat_mods modifiers);
 
 bool ptcl_parser_type_body_and_storage(
     ptcl_parser *parser,
     ptcl_name *const name,
     ptcl_statement_type_decl *decl,
-    ptcl_statement_modifiers modifiers);
+    ptcl_stat_mods modifiers);
 
 bool ptcl_parser_type_decl(
     ptcl_parser *parser,
     bool *is_provider,
     ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     ptcl_statement_type_decl *const out);
 
 bool ptcl_parser_assign_name(
@@ -1021,13 +1087,13 @@ bool ptcl_parser_assign_name(
     ptcl_name *const name,
     ptcl_parser_assign_dot_data *dot,
     ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers);
+    ptcl_stat_mods modifiers);
 
 bool ptcl_parser_assign_var_and_storage(
     ptcl_parser *parser,
     ptcl_identifier *const identifier,
     ptcl_statement_assign *assign,
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     bool is_decl_expected,
     ptcl_location location);
 
@@ -1037,46 +1103,52 @@ bool ptcl_parser_assign(
     ptcl_name *const name,
     ptcl_expression *left,
     ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers,
+    ptcl_stat_mods modifiers,
     ptcl_statement_assign *const out);
 
-ptcl_statement_return ptcl_parser_return(
-    ptcl_parser *parser);
-
-ptcl_statement *ptcl_parser_if(
+bool ptcl_parser_return(
     ptcl_parser *parser,
-    bool is_static);
+    ptcl_statement_return *const out);
 
-ptcl_expression *ptcl_parser_if_expression(
+bool ptcl_parser_if(
     ptcl_parser *parser,
-    bool is_static);
+    bool is_static,
+    ptcl_statement *const out);
 
-ptcl_statement_func_body ptcl_parser_unsyntax(
+bool ptcl_parser_if_expression(
+    ptcl_parser *parser,
+    bool is_static,
+    ptcl_expression **const out);
+
+bool ptcl_parser_unsyntax(
+    ptcl_parser *parser,
+    ptcl_statement_func_body *const out);
+
+bool ptcl_parser_syntax_decl(
     ptcl_parser *parser);
 
-void ptcl_parser_syntax_decl(
+bool ptcl_parser_loop(
+    ptcl_parser *parser,
+    ptcl_statement_loop *const out);
+
+bool ptcl_parser_undefine(
     ptcl_parser *parser);
 
-ptcl_statement_loop ptcl_parser_loop(
-    ptcl_parser *parser);
-
-void ptcl_parser_undefine(
-    ptcl_parser *parser);
-
-ptcl_func_body ptcl_parser_func_body(
+bool ptcl_parser_func_body(
     ptcl_parser *parser,
     bool with_brackets,
     bool change_root,
-    bool is_ignore_error);
+    bool is_ignore_error,
+    ptcl_func_body *const out);
 
-void ptcl_parser_func_body_by_pointer(
+bool ptcl_parser_func_body_by_pointer(
     ptcl_parser *parser,
     ptcl_func_body *func_body_pointer,
     bool with_brackets,
     bool change_root,
     bool is_ignore_error);
 
-void ptcl_parser_func_body_by_pointer_cap(
+bool ptcl_parser_func_body_by_pointer_cap(
     ptcl_parser *parser,
     ptcl_func_body *func_body_pointer,
     size_t *capacity,
@@ -1087,7 +1159,7 @@ void ptcl_parser_func_body_by_pointer_cap(
 ptcl_func_body *ptcl_parser_current_body(
     ptcl_parser *parser);
 
-void ptcl_parser_extra_body(
+bool ptcl_parser_extra_body(
     ptcl_parser *parser,
     bool is_syntax);
 
@@ -1100,52 +1172,52 @@ bool ptcl_parser_type(
 
 ptcl_expression *ptcl_parser_cast(
     ptcl_parser *parser,
-    ptcl_type *except,
-    ptcl_parser_expression_flags flags);
+    const ptcl_type * const expected,
+    ptcl_parser_expr_flags flags);
 
 ptcl_expression *ptcl_parser_binary(
     ptcl_parser *parser,
-    ptcl_type *except,
-    ptcl_parser_expression_flags flags);
+    const ptcl_type * const expected,
+    ptcl_parser_expr_flags flags);
 
 ptcl_expression *ptcl_parser_additive(
     ptcl_parser *parser,
-    ptcl_type *except,
-    ptcl_parser_expression_flags flags);
+    const ptcl_type * const expected,
+    ptcl_parser_expr_flags flags);
 
 ptcl_expression *ptcl_parser_multiplicative(
     ptcl_parser *parser,
-    ptcl_type *except,
-    ptcl_parser_expression_flags flags);
+    const ptcl_type * const expected,
+    ptcl_parser_expr_flags flags);
 
 ptcl_expression *ptcl_parser_unary(
     ptcl_parser *parser,
-    ptcl_type *except,
-    ptcl_parser_expression_flags flags);
+    const ptcl_type * const expected,
+    ptcl_parser_expr_flags flags);
 
 ptcl_expression *ptcl_parser_dot(
     ptcl_parser *parser,
-    ptcl_type *except,
+    const ptcl_type * const expected,
     ptcl_expression *left,
-    ptcl_parser_expression_flags flags);
+    ptcl_parser_expr_flags flags);
 
 ptcl_expression *ptcl_parser_array_element(
     ptcl_parser *parser,
-    ptcl_type *except,
+    const ptcl_type * const expected,
     ptcl_expression *left,
-    ptcl_parser_expression_flags flags);
+    ptcl_parser_expr_flags flags);
 
 ptcl_expression *ptcl_parser_value(
     ptcl_parser *parser,
-    ptcl_type *except,
-    ptcl_parser_expression_flags flags);
+    const ptcl_type *const expected,
+    ptcl_parser_expr_flags flags);
 
 bool ptcl_parser_try_provider_name(
     ptcl_parser *parser,
     ptcl_name *const name,
     ptcl_statement_type type,
     ptcl_attributes *const attributes,
-    ptcl_statement_modifiers modifiers);
+    ptcl_stat_mods modifiers);
 
 ptcl_name ptcl_parser_name_word(
     ptcl_parser *parser);
@@ -1259,6 +1331,10 @@ void ptcl_parser_insert_state_add_and_set(
 ptcl_func_body *ptcl_parser_root(
     ptcl_parser *parser);
 
+void ptcl_parser_set_root(
+    ptcl_parser *parser,
+    ptcl_func_body *root);   
+
 size_t ptcl_parser_variables_count(
     ptcl_parser *parser);
 
@@ -1290,6 +1366,10 @@ ptcl_statement *ptcl_parser_insert_pairs(
     ptcl_parser *parser,
     ptcl_statement *statement,
     ptcl_func_body *body);
+
+bool ptcl_parser_add_instance_unique_pointer(
+    ptcl_parser* parser,
+    ptcl_func_body* instance);
 
 bool ptcl_parser_add_instance_provider(
     ptcl_parser *parser,

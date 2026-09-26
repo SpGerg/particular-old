@@ -164,6 +164,7 @@
     <ClInclude Include="includes\transpiler\ptcl_transpiler.h" />
     <ClInclude Include="includes\utilities\ptcl_string.h" />
     <ClInclude Include="includes\utilities\ptcl_string_buffer.h" />
+    <ClInclude Include="includes\utilities\ptcl_utility.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

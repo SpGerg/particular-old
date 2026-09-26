@@ -79,7 +79,7 @@ static void ptcl_transpiler_add_variable_name(
     ptcl_transpiler_variable *variable;
     if (strcmp(name->value, "self") == 0)
     {
-        ptcl_name variable_name = ptcl_name_create_fast_w("this", false);
+        ptcl_name variable_name = ptcl_name_create_fast("this", false);
         if (ptcl_transpiler_try_get_variable(transpiler, &variable_name, &variable))
         {
             if (variable->type.is_static)
@@ -439,7 +439,11 @@ bool ptcl_transpiler_add_caller(
     }
 
     transpiler->callers = buffer;
-    transpiler->callers[transpiler->callers_count++] = ptcl_transpiler_caller_create(root, caller, start, count);
+    transpiler->callers[transpiler->callers_count++] = ptcl_transpiler_caller_create(
+        root, 
+        caller, 
+        start, 
+        count);
     return true;
 }
 
@@ -469,7 +473,9 @@ void ptcl_transpiler_add_func_body(
     // func_decl ptr
     const bool is_inserted = statement != NULL && statement->is_func_call;
     const bool with_caller = statement != NULL && statement->caller != NULL;
+    const bool is_self_added = with_caller && statement->self != NULL;
     size_t last_count = transpiler->replaced_count;
+    size_t added_arguments = 0;
     if (is_inserted)
     {
         ptcl_func_body *root = NULL;
@@ -481,7 +487,7 @@ void ptcl_transpiler_add_func_body(
 
         transpiler->inserted_bodies_depth++;
         // TODO: if it is not static, it will be not null
-        if (statement->self != NULL)
+        if (is_self_added)
         {
             ptcl_name temp = ptcl_transpiler_add_temp_variable(transpiler, statement->self);
             ptcl_transpiler_add_replaced(transpiler, &ptcl_name_self, &temp, root);
@@ -489,8 +495,15 @@ void ptcl_transpiler_add_func_body(
 
         for (size_t i = 0; i < statement->arguments_count; i++)
         {
-            ptcl_name temp = ptcl_transpiler_add_temp_variable(transpiler, statement->func_call.arguments[i]);
-            ptcl_transpiler_add_replaced(transpiler, &statement->arguments[i].name, &temp, root);
+            ptcl_expression* argument = statement->func_call.arguments[i];
+            if (!argument->return_type.is_static)
+            {
+                ptcl_name temp = ptcl_transpiler_add_temp_variable(transpiler, argument);
+                if (ptcl_transpiler_add_replaced(transpiler, &statement->arguments[i].name, &temp, root)) 
+                {
+                    added_arguments++;
+                }
+            }
         }
     }
 
@@ -503,12 +516,11 @@ void ptcl_transpiler_add_func_body(
     {
         if (with_caller)
         {
-            const size_t count = statement->arguments_count + (statement->self == NULL ? 0 : 1);
+            const size_t count = added_arguments + (is_self_added ? 1 : 0);
             ptcl_transpiler_add_caller(transpiler, transpiler->root, statement->caller, last_count, count);
         }
         else
         {
-            transpiler->root = previous;
             for (size_t i = last_count; i < transpiler->replaced_count; i++)
             {
                 ptcl_name_destroy(&transpiler->replaced[i].replaced_identifier);
@@ -517,6 +529,8 @@ void ptcl_transpiler_add_func_body(
             transpiler->replaced_count = last_count;
             transpiler->inserted_bodies_depth--;
         }
+
+        transpiler->root = previous;
     }
 
     if (with_brackets)
@@ -597,7 +611,7 @@ void ptcl_transpiler_add_statement(
                 ptcl_transpiler_caller *caller = NULL;
                 if (!ptcl_transpiler_is_caller(transpiler, statement->assign.value, &caller))
                 {
-                    ptcl_name anonymous = ptcl_name_create_l(ptcl_transpiler_generate_temp_and_add(transpiler), false, true);
+                    ptcl_name anonymous = ptcl_name_create_optional(ptcl_transpiler_generate_temp_and_add(transpiler), false, true);
                     if (anonymous.value != NULL)
                     {
                         ptcl_transpiler_add_type_and_name(
@@ -626,7 +640,7 @@ void ptcl_transpiler_add_statement(
                 ptcl_name generated_name =
                     name == NULL
                         ? statement->assign.identifier.name
-                        : ptcl_name_create_l(name, true, false);
+                        : ptcl_name_create_optional(name, true, false);
                 // ptcl_transpiler_add_array_dimensional(transpiler, statement->assign.type);
                 ptcl_transpiler_add_variable_f(
                     transpiler, &generated_name, &statement->assign.type, false, transpiler->root);
@@ -668,7 +682,7 @@ void ptcl_transpiler_add_statement(
             {
                 ptcl_statement_func_decl *function = &statement->type_decl.functions->statements[i]->func_decl;
                 char *name = ptcl_transpiler_get_func_name_in_type(statement->type_decl.name.value, function->identifier.value, base_type.is_static);
-                ptcl_name func_name = ptcl_name_create_fast_w(name, false);
+                ptcl_name func_name = ptcl_name_create_fast(name, false);
                 ptcl_transpiler_add_func_decl(transpiler, function, &func_name, &base_type);
                 free(name);
             }
@@ -784,7 +798,7 @@ static void ptcl_transpiler_add_func_signature(
     ptcl_type *self)
 {
     PTCL_VALIDATE_COND(func_decl != NULL && name != NULL);
-    ptcl_name empty = ptcl_name_create_fast_w(NULL, false);
+    ptcl_name empty = ptcl_name_create_fast(NULL, false);
     ptcl_transpiler_add_type_and_name(transpiler, &func_decl->return_type, &empty, func_decl, false, true);
     ptcl_transpiler_add_name(transpiler, name, true);
     ptcl_transpiler_append_character(transpiler, '(');
@@ -810,7 +824,7 @@ static void ptcl_transpiler_add_func_signature(
                 ptcl_transpiler_append_character(transpiler, ',');
             }
 
-            ptcl_type pointer = ptcl_type_create_pointer(&variable->type, false);
+            ptcl_type pointer = ptcl_type_create_pointer(&variable->type, false, false, false);
             ptcl_argument argument = ptcl_argument_create(&pointer, &variable->identifier);
             ptcl_transpiler_add_argument(transpiler, &argument);
             added = true;
@@ -853,9 +867,9 @@ static void ptcl_transpiler_add_func_signature(
 
     if (self != NULL)
     {
-        ptcl_type pointer = self->is_static ? *self : ptcl_type_create_pointer(self, false);
+        ptcl_type pointer = self->is_static ? *self : ptcl_type_create_pointer(self, false, false, false);
         pointer.is_const = func_decl->is_self_const;
-        ptcl_name argument_name = ptcl_name_create_fast_w("self", false);
+        ptcl_name argument_name = ptcl_name_create_fast("self", false);
         ptcl_argument argument = ptcl_argument_create(&pointer, &argument_name);
         ptcl_transpiler_add_argument(transpiler, &argument);
         if (func_decl->count > 0)
@@ -915,7 +929,7 @@ static void ptcl_transpiler_add_func_decl_body(
         transpiler->length = length;
     }
 
-    if (ptcl_statement_modifiers_flags_prototype(func_decl->modifiers))
+    if (ptcl_stat_mods_is_flags_prototype(func_decl->modifiers))
     {
         ptcl_transpiler_append_character(transpiler, ';');
     }
@@ -1113,7 +1127,7 @@ void ptcl_transpiler_add_expression(
 
         if (specify_type)
         {
-            ptcl_name empty = ptcl_name_create_fast_w(NULL, false);
+            ptcl_name empty = ptcl_name_create_fast(NULL, false);
 
             ptcl_transpiler_append_character(transpiler, '(');
             ptcl_transpiler_add_type_and_name(transpiler, &expression->return_type, &empty, NULL, false, false);
@@ -1148,7 +1162,7 @@ void ptcl_transpiler_add_expression(
         ptcl_parser_variable *variable = NULL;
         if (ptcl_parser_res_try_get_variable_by_id(&transpiler->result, expression->variable.variable_id, &variable))
         {
-            if (!variable->is_syntax_variable && ptcl_transpiler_try_get_replaced(transpiler, &name, &replaced, transpiler->root))
+            if (!ptcl_parser_var_flags_is_syntax(variable->flags) && ptcl_transpiler_try_get_replaced(transpiler, &name, &replaced, transpiler->root))
             {
                 ptcl_transpiler_add_variable_name(transpiler, &replaced.replaced_identifier);
                 break;
@@ -1278,7 +1292,7 @@ void ptcl_transpiler_add_expression(
         size_t count = caller->start + caller->count;
         for (size_t i = count; i < transpiler->replaced_count; i++)
         {
-            if (!ptcl_func_body_can_access(transpiler->replaced[i].root, caller->root))
+            if (!ptcl_func_body_can_access(caller->root, transpiler->replaced[i].root))
             {
                 break;
             }
@@ -1286,7 +1300,7 @@ void ptcl_transpiler_add_expression(
             count++;
         }
 
-        for (size_t i = caller->start; i < count - caller->start; i++)
+        for (size_t i = caller->start; i < count; i++)
         {
             ptcl_name_destroy(&transpiler->replaced[i].replaced_identifier);
         }
@@ -1298,8 +1312,17 @@ void ptcl_transpiler_add_expression(
                     (transpiler->replaced_count - count) * sizeof(ptcl_transpiler_replaced));
         }
 
+        const size_t caller_index = caller - transpiler->callers;
+        if (caller_index < transpiler->callers_count - 1)
+        {
+            memmove(&transpiler->callers[caller_index],
+                &transpiler->callers[caller_index + 1],
+                (transpiler->callers_count - caller_index - 1) * sizeof(ptcl_transpiler_caller));
+        }
+
         transpiler->inserted_bodies_depth--;
         transpiler->replaced_count -= count;
+        transpiler->callers_count--;
     }
 }
 
@@ -1382,7 +1405,7 @@ void ptcl_transpiler_add_func_type_args(
         }
         else
         {
-            ptcl_name empty = ptcl_name_create_fast_w(NULL, false);
+            ptcl_name empty = ptcl_name_create_fast(NULL, false);
             ptcl_transpiler_add_type_and_name(transpiler, &argument->type, &empty, NULL, true, false);
         }
 
@@ -1406,7 +1429,7 @@ char *ptcl_transpiler_add_type_and_name(
     ptcl_type_functon_pointer_type function;
     if (ptcl_type_is_function(type, &function))
     {
-        ptcl_name empty = ptcl_name_create_fast_w(NULL, false);
+        ptcl_name empty = ptcl_name_create_fast(NULL, false);
         char *func = ptcl_transpiler_add_type_and_name(transpiler, function.return_type, &empty, NULL, true, is_define);
         ptcl_transpiler_append_character(transpiler, '(');
         ptcl_transpiler_append_character(transpiler, '*');
@@ -1458,7 +1481,7 @@ char *ptcl_transpiler_add_type_and_name(
         return ptcl_transpiler_add_type_and_name(transpiler, &type->comp_type->types[0].type, name, NULL, false, is_define);
     case ptcl_value_array_type:
     {
-        ptcl_name array_name = ptcl_name_create_fast_w(NULL, false);
+        ptcl_name array_name = ptcl_name_create_fast(NULL, false);
         char *array = ptcl_transpiler_add_type_and_name(transpiler, type->array.target, &array_name, NULL, with_array, is_define);
         if (with_array)
         {
@@ -1484,7 +1507,7 @@ char *ptcl_transpiler_add_type_and_name(
             break;
         }
 
-        ptcl_name pointer_name = ptcl_name_create_fast_w(NULL, false);
+        ptcl_name pointer_name = ptcl_name_create_fast(NULL, false);
         char *pointer = ptcl_transpiler_add_type_and_name(transpiler, type->pointer.target, &pointer_name, NULL, with_array, is_define);
         ptcl_transpiler_append_character(transpiler, '*');
         if (type->is_const)
@@ -1614,7 +1637,7 @@ ptcl_name ptcl_transpiler_add_temp_variable(
     transpiler->from_position = true;
 
     ptcl_string_buffer_set_position(transpiler->string_buffer, transpiler->last_stat_position);
-    ptcl_name anonymous = ptcl_name_create_l(ptcl_transpiler_generate_temp_and_add(transpiler), false, true);
+    ptcl_name anonymous = ptcl_name_create_optional(ptcl_transpiler_generate_temp_and_add(transpiler), false, true);
     if (anonymous.value != NULL)
     {
         ptcl_transpiler_add_type_and_name(transpiler, &expression->return_type, &anonymous, NULL, false, true);
@@ -1729,6 +1752,11 @@ void ptcl_transpiler_destroy(
     free(transpiler->anonymouses);
     free(transpiler->variables);
     free(transpiler->inner_functions);
+    for (size_t i = 0; i < transpiler->replaced_count; i++) 
+    {
+        ptcl_name_destroy(&transpiler->replaced[i].replaced_identifier);
+    }
+
     free(transpiler->replaced);
     free(transpiler->callers);
     free(transpiler);
