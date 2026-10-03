@@ -359,6 +359,9 @@ typedef struct ptcl_parser_provider
     ptcl_parser_provider_variant *variants;
     size_t variants_capacity;
     size_t variants_count;
+    ptcl_parser_provider_variant* generators;
+    size_t generators_capacity;
+    size_t generators_count;
     size_t index;
     bool is_provider;
     bool is_out_of_scope;
@@ -729,6 +732,9 @@ static ptcl_parser_provider ptcl_parser_provider_create(
         .variants = NULL,
         .variants_capacity = 0,
         .variants_count = 0,
+        .generators = NULL,
+        .generators_capacity = 0,
+        .generators_count = 0,
         .index = index,
         .is_provider = is_provider,
         .is_out_of_scope = false};
@@ -845,6 +851,32 @@ static bool ptcl_parser_provider_add_variant(
     return true;
 }
 
+static bool ptcl_parser_provider_add_generator(
+    ptcl_parser_provider* provider,
+    const ptcl_parser_provider_variant* const generator)
+{
+    PTCL_VALIDATE_COND(generator != NULL);
+    if (provider->generators_count >= provider->generators_capacity)
+    {
+        if (provider->generators_count == 0)
+        {
+            provider->generators_capacity = 1;
+        }
+
+        provider->generators_capacity *= 2;
+        ptcl_parser_provider_variant* buffer = realloc(provider->generators, provider->generators_capacity * sizeof(ptcl_parser_provider_variant));
+        if (buffer == NULL)
+        {
+            return false;
+        }
+
+        provider->generators = buffer;
+    }
+
+    provider->generators[provider->generators_count++] = *generator;
+    return true;
+}
+
 static void ptcl_parser_provider_variant_destroy(
     ptcl_parser_provider_variant *const variant)
 {
@@ -876,6 +908,12 @@ static void ptcl_parser_provider_destroy(
     }
 
     free(provider->variants);
+    for (size_t i = 0; i < provider->generators_count; i++)
+    {
+        ptcl_parser_provider_variant_destroy(&provider->generators[i]);
+    }
+
+    free(provider->generators);
 }
 
 static void ptcl_parser_syntax_node_destroy(

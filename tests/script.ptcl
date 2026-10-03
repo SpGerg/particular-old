@@ -39,7 +39,9 @@ type list generator(T: static type) {
 		~name: static word = list_typedata_name(T)
 		typedata !~name(entities: !T*, count: integer)
     } !~name {
-		
+		function print(self): void {
+			print(self.entities[0])
+		}
 	}
 }
 
@@ -50,7 +52,8 @@ function create provider(T: static type) {
 }
 
 function main(): integer {
-	g: list(>character) = create(>character)(8)
+	list: list(>character) = create(>character)(8)
+	list2: list(>character) = create(>character)(16)
 
 	return 0
 }

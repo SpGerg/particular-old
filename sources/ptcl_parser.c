@@ -3777,11 +3777,11 @@ static bool ptcl_parser_try_generate_or_get_provider(
 		}
 	}
 
+	ptrdiff_t index = 0;
 	if (provider->is_provider)
 	{
-		ptrdiff_t index = 0;
 		void *already_result = NULL;
-		if (provider->is_provider && ptcl_parser_try_get_variant(parser, provider, &func_call, is_static, &index, &already_result))
+		if (ptcl_parser_try_get_variant(parser, provider, &func_call, is_static, &index, &already_result))
 		{
 			ptcl_statement_func_call_destroy(&func_call);
 			if (already_result != NULL)
@@ -3792,237 +3792,244 @@ static bool ptcl_parser_try_generate_or_get_provider(
 
 			goto result_by_index;
 		}
+	}
 
-		char *count = ptcl_from_long(provider - parser->providers.items);
-		// We are counting from unused
-		char *variant_index;
-		if (provider->is_provider)
-		{
-			variant_index = ptcl_from_long(provider->variants_count);
-		}
-		else
-		{
-			variant_index = ptcl_from_long(parser->providers.generators_count++);
-		}
+	char *count = ptcl_from_long(provider - parser->providers.items);
+	// We are counting from unused
+	char *variant_index;
+	if (provider->is_provider)
+	{
+		variant_index = ptcl_from_long(provider->variants_count);
+	}
+	else
+	{
+		variant_index = ptcl_from_long(parser->providers.generators_count++);
+	}
 
-		if (count == NULL || variant_index == NULL)
-		{
-			free(count);
-			free(variant_index);
-			ptcl_statement_func_call_destroy(&func_call);
-			ptcl_parser_throw_out_of_memory(parser, location);
-			return false;
-		}
-
-		ptcl_name name = ptcl_name_create_basic(ptcl_string(provider->identifier.value, count, variant_index, NULL), true);
+	if (count == NULL || variant_index == NULL)
+	{
 		free(count);
 		free(variant_index);
-		if (name.value == NULL)
+		ptcl_statement_func_call_destroy(&func_call);
+		ptcl_parser_throw_out_of_memory(parser, location);
+		return false;
+	}
+
+	ptcl_name name = ptcl_name_create_basic(ptcl_string(provider->identifier.value, count, variant_index, NULL), true);
+	free(count);
+	free(variant_index);
+	if (name.value == NULL)
+	{
+		ptcl_statement_func_call_destroy(&func_call);
+		ptcl_parser_throw_out_of_memory(parser, location);
+		return false;
+	}
+
+	ptcl_parser_temp *temp = &parser->temp;
+	ptcl_parser_tokens_state *late = &parser->lated_states.items[provider->index];
+	ptcl_parser_tokens_state state = parser->state.tokens;
+	ptcl_parser_set_tokens_state(parser, late);
+	ptcl_parser_set_position(parser, 0);
+
+	// TODO: func_call and this to one func
+	// TODO: also variadic
+	size_t variables_index = parser->variables.count;
+	for (size_t i = 0; i < func_call.count; i++)
+	{
+		ptcl_expression *argument = func_call.arguments[i];
+		ptcl_parser_variable variable = ptcl_parser_variable_create(
+			&provider->func_decl.arguments[i].name,
+			&argument->return_type,
+			argument,
+			true,
+			ptcl_parser_root(parser));
+		if (!ptcl_parser_add_instance_variable(parser, &variable))
 		{
 			ptcl_statement_func_call_destroy(&func_call);
+			ptcl_name_destroy(&name);
 			ptcl_parser_throw_out_of_memory(parser, location);
 			return false;
 		}
+	}
 
-		ptcl_parser_temp *temp = &parser->temp;
-		ptcl_parser_tokens_state *late = &parser->lated_states.items[provider->index];
-		ptcl_parser_tokens_state state = parser->state.tokens;
-		ptcl_parser_set_tokens_state(parser, late);
-		ptcl_parser_set_position(parser, 0);
+	ptcl_statement_func_decl func_decl;
+	ptcl_statement_typedata_decl typedata_decl;
+	ptcl_statement_type_decl type_decl;
+	ptcl_statement_assign assign_decl;
+	bool is_succesful = true;
+	switch (type)
+	{
+	case ptcl_statement_func_decl_type:
+		is_succesful = ptcl_parser_func_body_and_storage(parser, &name, &func_decl, NULL, false, provider->modifiers);
+		break;
+	case ptcl_statement_typedata_decl_type:
+		is_succesful = ptcl_parser_typedata_body_and_storage(parser, &name, &typedata_decl, provider->modifiers);
+		break;
+	case ptcl_statement_type_decl_type:
+		is_succesful = ptcl_parser_type_body_and_storage(parser, &name, &type_decl, provider->modifiers);
+		break;
+	case ptcl_statement_assign_type:
+	{
+		ptcl_identifier identifier = ptcl_identifier_create_by_name(&name);
+		is_succesful = ptcl_parser_assign_var_and_storage(parser, &identifier, &assign_decl, true, provider->modifiers, location);
+		break;
+	}
+	default:
+		return false;
+	}
 
-		// TODO: func_call and this to one func
-		// TODO: also variadic
-		size_t variables_index = parser->variables.count;
-		for (size_t i = 0; i < func_call.count; i++)
-		{
-			ptcl_expression *argument = func_call.arguments[i];
-			ptcl_parser_variable variable = ptcl_parser_variable_create(
-				&provider->func_decl.arguments[i].name,
-				&argument->return_type,
-				argument,
-				true,
-				ptcl_parser_root(parser));
-			if (!ptcl_parser_add_instance_variable(parser, &variable))
-			{
-				ptcl_statement_func_call_destroy(&func_call);
-				ptcl_name_destroy(&name);
-				ptcl_parser_throw_out_of_memory(parser, location);
-				return false;
-			}
-		}
-
-		ptcl_statement_func_decl func_decl;
-		ptcl_statement_typedata_decl typedata_decl;
-		ptcl_statement_type_decl type_decl;
-		ptcl_statement_assign assign_decl;
-		bool is_succesful = true;
-		switch (type)
-		{
-		case ptcl_statement_func_decl_type:
-			is_succesful = ptcl_parser_func_body_and_storage(parser, &name, &func_decl, NULL, false, provider->modifiers);
-			break;
-		case ptcl_statement_typedata_decl_type:
-			is_succesful = ptcl_parser_typedata_body_and_storage(parser, &name, &typedata_decl, provider->modifiers);
-			break;
-		case ptcl_statement_type_decl_type:
-			is_succesful = ptcl_parser_type_body_and_storage(parser, &name, &type_decl, provider->modifiers);
-			break;
-		case ptcl_statement_assign_type:
-		{
-			ptcl_identifier identifier = ptcl_identifier_create_by_name(&name);
-			is_succesful = ptcl_parser_assign_var_and_storage(parser, &identifier, &assign_decl, true, provider->modifiers, location);
-			break;
-		}
-		default:
-			return false;
-		}
-
-		ptcl_parser_set_tokens_state(parser, &state);
-		if (!is_succesful)
-		{
-		cleanup:
-			for (size_t i = 0; i < func_call.count; i++)
-			{
-				ptcl_parser_variable *variable = &parser->variables.items[i + variables_index];
-				PTCL_FLAGS_REMOVE(variable->flags, ptcl_parser_var_built_in_flag);
-			}
-
-			ptcl_statement_func_call_destroy(&func_call);
-			return false;
-		}
-
-		// TODO: make func for root
-		ptcl_statement *statement = ptcl_statement_create(
-			type,
-			ptcl_stat_mods_is_flags_global(provider->modifiers) ? NULL : ptcl_parser_root(parser),
-			&provider->attributes,
-			location);
-		if (statement == NULL)
-		{
-			// Storaged
-		cleanup2:
-			switch (type)
-			{
-			case ptcl_statement_func_decl_type:
-				ptcl_parser_function_destroy(&parser->functions.items[--parser->functions.count]);
-				break;
-			case ptcl_statement_typedata_decl_type:
-				ptcl_parser_typedata_destroy(&parser->typedatas.items[--parser->typedatas.count]);
-				break;
-			case ptcl_statement_type_decl_type:
-				ptcl_parser_comp_type_destroy(&parser->comp_types.items[--parser->comp_types.count]);
-				break;
-			case ptcl_statement_assign_type:
-				ptcl_parser_variable_destroy(&parser->variables.items[--parser->variables.count]);
-				break;
-			default:
-				return false;
-			}
-
-			switch (type)
-			{
-			case ptcl_statement_func_decl_type:
-				ptcl_statement_func_decl_destroy(&func_decl);
-				break;
-			case ptcl_statement_typedata_decl_type:
-				ptcl_statement_typedata_decl_destroy(&typedata_decl);
-				break;
-			case ptcl_statement_type_decl_type:
-				ptcl_statement_type_decl_destroy(&type_decl);
-				break;
-			case ptcl_statement_assign_type:
-				ptcl_statement_assign_destroy(&assign_decl);
-				break;
-			default:
-				return false;
-			}
-
-			goto cleanup;
-		}
-
-		// Cuz it's last parsed
-		switch (type)
-		{
-		case ptcl_statement_func_decl_type:
-			index = parser->functions.count - 1;
-			break;
-		case ptcl_statement_typedata_decl_type:
-			index = parser->typedatas.count - 1;
-			break;
-		case ptcl_statement_type_decl_type:
-			index = parser->comp_types.count - 1;
-			break;
-		case ptcl_statement_assign_type:
-			index = parser->variables.count - 1;
-			break;
-		default:
-			return false;
-		}
-
-		ptcl_parser_provider_variant variant = ptcl_parser_provider_variant_create(func_call.arguments, func_call.count, index);
-		if (provider->is_provider)
-		{
-			if (!ptcl_parser_provider_add_variant(provider, &variant))
-			{
-				// Storaged
-				ptcl_statement_destroy(statement);
-				goto cleanup2;
-			}
-		}
-
-		switch (type)
-		{
-		case ptcl_statement_func_decl_type:
-			statement->func_decl = func_decl;
-			break;
-		case ptcl_statement_typedata_decl_type:
-			statement->typedata_decl = typedata_decl;
-			break;
-		case ptcl_statement_type_decl_type:
-			statement->type_decl = type_decl;
-			break;
-		case ptcl_statement_assign_type:
-			statement->assign = assign_decl;
-			break;
-		default:
-			return false;
-		}
-
-		if (!ptcl_parser_add_statement_to_root(parser, statement, location))
-		{
-			// Free calls on variant.values anyway even if no members
-			variant.count--;
-			// Arguments values will be destroyed on parsing result destroying
-			ptcl_statement_destroy(statement);
-			goto cleanup2;
-		}
-
+	ptcl_parser_set_tokens_state(parser, &state);
+	if (!is_succesful)
+	{
+	cleanup:
 		for (size_t i = 0; i < func_call.count; i++)
 		{
 			ptcl_parser_variable *variable = &parser->variables.items[i + variables_index];
 			PTCL_FLAGS_REMOVE(variable->flags, ptcl_parser_var_built_in_flag);
 		}
 
-	result_by_index:
+		ptcl_statement_func_call_destroy(&func_call);
+		return false;
+	}
+
+	// TODO: make func for root
+	ptcl_statement *statement = ptcl_statement_create(
+		type,
+		ptcl_stat_mods_is_flags_global(provider->modifiers) ? NULL : ptcl_parser_root(parser),
+		&provider->attributes,
+		location);
+	if (statement == NULL)
+	{
+		// Storaged
+	cleanup2:
 		switch (type)
 		{
 		case ptcl_statement_func_decl_type:
-			*result = &parser->functions.items[index];
+			ptcl_parser_function_destroy(&parser->functions.items[--parser->functions.count]);
 			break;
 		case ptcl_statement_typedata_decl_type:
-			*result = parser->typedatas.items[index].typedata;
+			ptcl_parser_typedata_destroy(&parser->typedatas.items[--parser->typedatas.count]);
 			break;
 		case ptcl_statement_type_decl_type:
-			*result = &parser->comp_types.items[index];
+			ptcl_parser_comp_type_destroy(&parser->comp_types.items[--parser->comp_types.count]);
 			break;
 		case ptcl_statement_assign_type:
-			*result = &parser->variables.items[index];
+			ptcl_parser_variable_destroy(&parser->variables.items[--parser->variables.count]);
 			break;
 		default:
 			return false;
 		}
 
-		return true;
+		switch (type)
+		{
+		case ptcl_statement_func_decl_type:
+			ptcl_statement_func_decl_destroy(&func_decl);
+			break;
+		case ptcl_statement_typedata_decl_type:
+			ptcl_statement_typedata_decl_destroy(&typedata_decl);
+			break;
+		case ptcl_statement_type_decl_type:
+			ptcl_statement_type_decl_destroy(&type_decl);
+			break;
+		case ptcl_statement_assign_type:
+			ptcl_statement_assign_destroy(&assign_decl);
+			break;
+		default:
+			return false;
+		}
+
+		goto cleanup;
+	}
+
+	// Cuz it's last parsed
+	switch (type)
+	{
+	case ptcl_statement_func_decl_type:
+		index = parser->functions.count - 1;
+		break;
+	case ptcl_statement_typedata_decl_type:
+		index = parser->typedatas.count - 1;
+		break;
+	case ptcl_statement_type_decl_type:
+		index = parser->comp_types.count - 1;
+		break;
+	case ptcl_statement_assign_type:
+		index = parser->variables.count - 1;
+		break;
+	default:
+		return false;
+	}
+
+	ptcl_parser_provider_variant variant = ptcl_parser_provider_variant_create(func_call.arguments, func_call.count, index);
+	if (provider->is_provider)
+	{
+		if (!ptcl_parser_provider_add_variant(provider, &variant))
+		{
+			// Storaged
+			ptcl_statement_destroy(statement);
+			goto cleanup2;
+		}
+	}
+	else 
+	{
+		if (!ptcl_parser_provider_add_generator(provider, &variant))
+		{
+			// Storaged
+			ptcl_statement_destroy(statement);
+			goto cleanup2;
+		}
+	}
+
+	switch (type)
+	{
+	case ptcl_statement_func_decl_type:
+		statement->func_decl = func_decl;
+		break;
+	case ptcl_statement_typedata_decl_type:
+		statement->typedata_decl = typedata_decl;
+		break;
+	case ptcl_statement_type_decl_type:
+		statement->type_decl = type_decl;
+		break;
+	case ptcl_statement_assign_type:
+		statement->assign = assign_decl;
+		break;
+	default:
+		return false;
+	}
+
+	if (!ptcl_parser_add_statement_to_root(parser, statement, location))
+	{
+		// Free calls on variant.values anyway even if no members
+		variant.count--;
+		// Arguments values will be destroyed on parsing result destroying
+		ptcl_statement_destroy(statement);
+		goto cleanup2;
+	}
+
+	for (size_t i = 0; i < func_call.count; i++)
+	{
+		ptcl_parser_variable *variable = &parser->variables.items[i + variables_index];
+		PTCL_FLAGS_REMOVE(variable->flags, ptcl_parser_var_built_in_flag);
+	}
+
+result_by_index:
+	switch (type)
+	{
+	case ptcl_statement_func_decl_type:
+		*result = &parser->functions.items[index];
+		break;
+	case ptcl_statement_typedata_decl_type:
+		*result = parser->typedatas.items[index].typedata;
+		break;
+	case ptcl_statement_type_decl_type:
+		*result = &parser->comp_types.items[index];
+		break;
+	case ptcl_statement_assign_type:
+		*result = &parser->variables.items[index];
+		break;
+	default:
+		return false;
 	}
 
 	return true;
@@ -4699,7 +4706,6 @@ bool ptcl_parser_typedata_name(
 	if (ptcl_parser_is_typedata_defined(parser, name))
 	{
 		ptcl_parser_throw_redefination(parser, name->value, location);
-		return false;
 	}
 
 	return true;
@@ -7369,7 +7375,7 @@ bool ptcl_parser_try_provider_name(
 			return false;
 		}
 
-		is_provider = true;
+		is_provider = false;
 	}
 
 	ptcl_parser_except(parser, ptcl_token_left_par_type);

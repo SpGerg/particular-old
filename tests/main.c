@@ -15,7 +15,6 @@
 // TODO: finish pointers with loc
 // sattic void
 
-
 int main()
 {
     char *source;
