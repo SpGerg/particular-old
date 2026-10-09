@@ -66,7 +66,7 @@ static ptcl_transpiler_variable ptcl_transpiler_variable_create_this(
     ptcl_func_body *root)
 {
     PTCL_VALIDATE_COND(type != NULL);
-    ptcl_name identifier = ptcl_name_create_fast("this", false);
+    ptcl_name identifier = ptcl_name_create_borrowed("this", false);
     return (ptcl_transpiler_variable){
         .identifier = identifier,
         .type = *type,
@@ -130,11 +130,11 @@ char *ptcl_transpiler_transpile(
 
 bool ptcl_transpiler_append_word_s(
     ptcl_transpiler *transpiler, 
-    char *word);
+    const char *word);
 
 bool ptcl_transpiler_append_word(
     ptcl_transpiler *transpiler, 
-    char *word);
+    const char *word);
 
 bool ptcl_transpiler_append_character(
     ptcl_transpiler *transpiler, 

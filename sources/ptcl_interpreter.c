@@ -368,7 +368,7 @@ ptcl_expression *ptcl_interpreter_evaluate_function_call(
     bool *is_self_used,
     ptcl_location location)
 {
-    if (func_call->identifier.is_name && strcmp(func_call->identifier.name.value, PTCL_PARSER_ERROR_FUNC_NAME) == 0)
+    if (func_call->identifier.is_name && strcmp(ptcl_name_value(&func_call->identifier.name), PTCL_PARSER_ERROR_FUNC_NAME) == 0)
     {
         ptcl_parser_throw_user(interpreter->parser, ptcl_string_from_array(&func_call->arguments[0]->array), location);
         return NULL;
@@ -560,9 +560,9 @@ ptcl_expression *ptcl_interpreter_get_member_from_dot(
     ptcl_name name = expression->dot.name;
     ptcl_argument *member;
     size_t index;
-    if (!ptcl_parser_try_get_typedata_member(interpreter->parser, &typedata, name.value, &member, &index))
+    if (!ptcl_parser_try_get_typedata_member(interpreter->parser, &typedata, ptcl_name_value(&name), &member, &index))
     {
-        ptcl_parser_throw_unknown_member(interpreter->parser, name.value, location);
+        ptcl_parser_throw_unknown_member(interpreter->parser, ptcl_name_value(&name), location);
         ptcl_expression_destroy(left);
         return NULL;
     }

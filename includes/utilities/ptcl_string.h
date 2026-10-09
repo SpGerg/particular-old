@@ -63,7 +63,7 @@ static inline char *ptcl_from_int(int number)
     return result;
 }
 
-static inline char *ptcl_string(char *first, ...)
+static inline char *ptcl_string(const char *first, ...)
 {
     va_list arguments;
     va_start(arguments, first);

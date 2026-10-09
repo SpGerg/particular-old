@@ -160,7 +160,7 @@ static bool ptcl_typedata_builder_add_member(ptcl_typedata_builder *builder, cha
         return false;
     }
 
-    ptcl_name member_name = ptcl_name_create_fast(name, false);
+    ptcl_name member_name = ptcl_name_create_borrowed(name, false);
     builder->members = buffer;
     builder->members[builder->count] = ptcl_argument_create(&type, &member_name);
     builder->count++;

@@ -192,16 +192,215 @@ typedef enum ptcl_value_type
     ptcl_value_void_type,
 } ptcl_value_type;
 
+typedef enum ptcl_name_type 
+{
+    ptcl_name_string_type,
+    ptcl_name_provider_type
+} ptcl_name_type;
+
 typedef struct ptcl_name ptcl_name;
 
 typedef struct ptcl_name
 {
-    char *value;
-    struct ptcl_name *next;
+    ptcl_name_type type;
+    size_t provider;
     bool is_anonymous;
-    bool needs_free;
-    bool next_needs_free;
-} ptcl_name;
+
+    struct {
+        char* value;
+        struct ptcl_name* next;
+        bool needs_free;
+        bool next_needs_free;
+    } meta;
+} ptcl_name; 
+
+static ptcl_name ptcl_name_create(
+    size_t provider,
+    const char* value,
+    bool is_anonymous,
+    bool needs_free,
+    ptcl_name* next,
+    bool next_needs_free)
+{
+    return (ptcl_name) {
+        .type = ptcl_name_string_type,
+        .provider = provider,
+        .is_anonymous = is_anonymous,
+        .meta.value = value,
+        .meta.needs_free = needs_free,
+        .meta.next = next,
+        .meta.next_needs_free = next_needs_free};
+}
+
+static ptcl_name ptcl_name_provider_create(
+    size_t provider,
+    const char* value,
+    bool is_anonymous,
+    bool needs_free,
+    ptcl_name* next,
+    bool next_needs_free) 
+{
+    return ptcl_name_create(provider, value, is_anonymous, needs_free, next, needs_free);
+}
+
+static ptcl_name ptcl_name_string_create(
+    const char* value,
+    bool is_anonymous,
+    bool needs_free,
+    ptcl_name* next,
+    bool next_needs_free)
+{
+    return ptcl_name_create(0, value, is_anonymous, needs_free, next, needs_free);
+}
+
+static ptcl_name* ptcl_name_create_as_next(
+    const ptcl_name* const name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    ptcl_name* next = malloc(sizeof(ptcl_name));
+    if (next == NULL)
+    {
+        return NULL;
+    }
+
+    *next = *name;
+    return next;
+}
+
+static ptcl_name ptcl_name_create_borrowed_with_next(
+    char* value,
+    ptcl_name* next,
+    bool needs_next_free)
+{
+    return ptcl_name_string_create(value, false, false, next, needs_next_free);
+}
+
+static ptcl_name ptcl_name_create_owned_with_next(
+    char* value,
+    ptcl_name* next,
+    bool needs_next_free)
+{
+    return ptcl_name_string_create(value, false, true, next, needs_next_free);
+}
+
+static ptcl_name ptcl_name_create_anonymous(
+    char* value,
+    bool needs_free)
+{
+    return ptcl_name_string_create(value, true, needs_free, NULL, false);
+}
+
+static ptcl_name ptcl_name_create_optional(
+    char* value,
+    bool is_anonymous,
+    bool needs_free)
+{
+    return ptcl_name_string_create(value, is_anonymous, needs_free, NULL, false);
+}
+
+static ptcl_name ptcl_name_create_borrowed(
+    const char* value, bool is_anonymous)
+{
+    return ptcl_name_string_create(value, is_anonymous, false, NULL, false);
+}
+
+static ptcl_name ptcl_name_create_owned(
+    char* value, bool is_anonymous)
+{
+    return ptcl_name_string_create(value, is_anonymous, true, NULL, false);
+}
+
+static ptcl_name ptcl_name_create_shallow_copy(
+    ptcl_name* const name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    return ptcl_name_string_create(name->meta.value, name->is_anonymous, false, name->meta.next, false);
+}
+
+static bool ptcl_name_create_deep_copy(
+    ptcl_name* const name,
+    ptcl_name* const out)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    if (out == NULL)
+    {
+        return false;
+    }
+
+    char* value = ptcl_string_duplicate(name->meta.value);
+    if (name->meta.value != NULL && value == NULL)
+    {
+        return false;
+    }
+
+    ptcl_name* next = NULL;
+    const bool needs_next_free = name->meta.next != NULL;
+    if (needs_next_free)
+    {
+        next = malloc(sizeof(ptcl_name));
+        if (next == NULL)
+        {
+        cleanup:
+            free(value);
+            return false;
+        }
+
+        if (!ptcl_name_create_deep_copy(name->meta.next, next))
+        {
+            free(next);
+            goto cleanup;
+        }
+    }
+
+    *out = ptcl_name_string_create(value, name->is_anonymous, true, next, needs_next_free);
+    return true;
+}
+
+static void ptcl_name_make_immutable(ptcl_name* const name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    name->meta.needs_free = false;
+    name->meta.next_needs_free = false;
+}
+
+static const char* ptcl_name_value(const ptcl_name* name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    return name->meta.value;
+}
+
+static char* ptcl_name_to_string_copy(const ptcl_name* name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    if (name->type == ptcl_name_string_type) {
+        return ptcl_string_duplicate(name->meta.value);
+    }
+
+    char* id = ptcl_from_long(name->provider);
+    if (id == NULL) {
+        return NULL;
+    }
+
+    return ptcl_string(name->meta.value, "(", id, ")", NULL);
+}
+
+static bool ptcl_name_needs_free(const ptcl_name* name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    return name->meta.needs_free;
+}
+
+static const ptcl_name* const ptcl_name_next(const ptcl_name* name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    return name->meta.next;
+}
+
+static bool ptcl_name_next_needs_free(const ptcl_name* name)
+{
+    PTCL_VALIDATE_COND(name != NULL);
+    return name->meta.next_needs_free;
+}
 
 typedef struct ptcl_identifier
 {
@@ -307,25 +506,31 @@ typedef struct ptcl_argument
 } ptcl_argument;
 
 static ptcl_name ptcl_name_this = {
-    .value = "this",
+    .type = ptcl_name_string_type,
+    .provider = 0,
     .is_anonymous = false,
-    .needs_free = false,
-    .next_needs_free = false,
-    .next = NULL};
+    .meta.value = "this",
+    .meta.needs_free = false,
+    .meta.next_needs_free = false,
+    .meta.next = NULL};
 
-static ptcl_name ptcl_name_self = {
-    .value = "self",
+static ptcl_name ptcl_name_self = { 
+    .type = ptcl_name_string_type,
+    .provider = 0,
     .is_anonymous = false,
-    .needs_free = false,
-    .next_needs_free = false,
-    .next = NULL};
+    .meta.value = "self",
+    .meta.needs_free = false,
+    .meta.next_needs_free = false,
+    .meta.next = NULL};
 
 static ptcl_name ptcl_name_empty = {
-    .value = "",
+    .type = ptcl_name_string_type,
+    .provider = 0,
     .is_anonymous = false,
-    .needs_free = false,
-    .next_needs_free = false,
-    .next = NULL};
+    .meta.value = "",
+    .meta.needs_free = false,
+    .meta.next_needs_free = false,
+    .meta.next = NULL };
 
 static ptcl_type ptcl_type_any = {
     .type = ptcl_value_any_type,
@@ -643,7 +848,7 @@ static bool ptcl_type_is_castable(
 static bool ptcl_type_equals(
     const ptcl_type *const left,
     const ptcl_type *const right);
-static ptcl_name ptcl_name_create_fast(
+static ptcl_name ptcl_name_create_borrowed(
     char *value,
     bool is_anonymous);
 static void ptcl_type_destroy(
@@ -704,7 +909,7 @@ static ptcl_argument ptcl_argument_create_variadic(
     bool is_static)
 {
     return (ptcl_argument){
-        .name = ptcl_name_create_fast("...", false),
+        .name = ptcl_name_create_borrowed("...", false),
         .type = ptcl_type_any,
         .type.is_static = is_static,
         .default_value = NULL,
@@ -730,126 +935,6 @@ static ptcl_attribute ptcl_attribute_create(
         .name = *name};
 }
 
-static ptcl_name ptcl_name_create(
-    char* value,
-    bool needs_free,
-    bool is_anonymous,
-    ptcl_name* next,
-    bool next_needs_free)
-{
-    return (ptcl_name) {
-        .value = value,
-            .needs_free = needs_free,
-            .is_anonymous = is_anonymous,
-            .next = next,
-            .next_needs_free = next_needs_free
-    };
-}
-
-static ptcl_name* ptcl_name_create_as_next(
-    const ptcl_name* const name)
-{
-    PTCL_VALIDATE_COND(name != NULL);
-    ptcl_name* next = malloc(sizeof(ptcl_name));
-    if (next == NULL)
-    {
-        return NULL;
-    }
-
-    *next = *name;
-    return next;
-}
-
-static ptcl_name ptcl_name_create_basic_with_next(
-    char* value,
-    bool needs_free,
-    ptcl_name *next,
-    bool needs_next_free)
-{
-    return ptcl_name_create(value, needs_free, false, next, needs_next_free);
-}
-
-static ptcl_name ptcl_name_create_basic(
-    char *value,
-    bool needs_free)
-{
-    return ptcl_name_create_basic_with_next(value, needs_free, NULL, false);
-}
-
-static ptcl_name ptcl_name_create_anonymous(
-    char* value,
-    bool needs_free)
-{
-    return ptcl_name_create(value, needs_free, true, NULL, false);
-}
-
-static ptcl_name ptcl_name_create_optional(
-    char *value,
-    bool is_anonymous,
-    bool needs_free)
-{
-    return ptcl_name_create(value, needs_free, is_anonymous, NULL, false);
-}
-
-static ptcl_name ptcl_name_create_fast(
-    char *value, bool is_anonymous)
-{
-    return ptcl_name_create(value, false, is_anonymous, NULL, false);
-}
-
-static ptcl_name ptcl_name_create_shallow_copy(
-    ptcl_name* const name)
-{
-    PTCL_VALIDATE_COND(name != NULL);
-    return ptcl_name_create(name->value, false, name->is_anonymous, name->next, false);
-}
-
-static bool ptcl_name_create_deep_copy(
-    ptcl_name* const name,
-    ptcl_name* const out)
-{
-    PTCL_VALIDATE_COND(name != NULL);
-    if (out == NULL)
-    {
-        return false;
-    }
-
-    char* value = ptcl_string_duplicate(name->value);
-    if (name->value != NULL && value == NULL)
-    {
-        return false;
-    }
-
-    ptcl_name* next = NULL;
-    const bool needs_next_free = name->next != NULL;
-    if (needs_next_free)
-    {
-        next = malloc(sizeof(ptcl_name));
-        if (next == NULL)
-        {
-        cleanup:
-            free(value);
-            return false;
-        }
-
-        if (!ptcl_name_create_deep_copy(name->next, next))
-        {
-            free(next);
-            goto cleanup;
-        }
-    }
-
-    *out = ptcl_name_create(value, true, name->is_anonymous, next, needs_next_free);
-    return true;
-}
-
-static void ptcl_name_make_immutable(ptcl_name* const name)
-{
-    PTCL_VALIDATE_COND(name != NULL);
-    name->needs_free = false;
-    name->next_needs_free = false;
-}
-
 static ptcl_identifier ptcl_identifier_create_by_name(
     const ptcl_name *const name)
 {
@@ -872,7 +957,7 @@ static ptcl_identifier ptcl_identifier_create_by_str(
 {
     return (ptcl_identifier){
         .is_name = true,
-        .name = ptcl_name_create_fast(value, false)};
+        .name = ptcl_name_create_borrowed(value, false)};
 }
 
 static ptcl_type ptcl_type_create_base(
@@ -958,7 +1043,7 @@ static ptcl_type_comp_type ptcl_type_create_comp_type(
 {
     PTCL_VALIDATE_COND(type_decl != NULL);
     return (ptcl_type_comp_type){
-        .identifier = ptcl_name_create_fast(type_decl->name.value, false),
+        .identifier = ptcl_name_create_borrowed(ptcl_name_value(&type_decl->name), false),
         .types = type_decl->types,
         .count = type_decl->types_count,
         .functions = type_decl->functions,
@@ -1275,8 +1360,8 @@ static bool ptcl_value_is_number(
 }
 
 static bool ptcl_name_chain_compare(
-    ptcl_name *left,
-    ptcl_name *right)
+    const ptcl_name *const left,
+    const ptcl_name *const right)
 {
     if (left == right)
     {
@@ -1288,24 +1373,24 @@ static bool ptcl_name_chain_compare(
         return false;
     }
 
-    if ((left->is_anonymous != right->is_anonymous) || !ptcl_string_equals(left->value, right->value))
+    if ((left->is_anonymous != right->is_anonymous) || !ptcl_string_equals(ptcl_name_value(left), ptcl_name_value(right)))
     {
         return false;
     }
 
-    return ptcl_name_chain_compare(left->next, right->next);
+    return ptcl_name_chain_compare(ptcl_name_next(left), ptcl_name_next(right));
 }
 
 static bool ptcl_name_compare(
     const ptcl_name *const left,
     const ptcl_name *const right)
 {
-    if ((left->is_anonymous != right->is_anonymous) || !ptcl_string_equals(left->value, right->value))
+    if ((left->is_anonymous != right->is_anonymous) || !ptcl_string_equals(ptcl_name_value(left), ptcl_name_value(right)))
     {
         return false;
     }
 
-    return ptcl_name_chain_compare(left->next, right->next);
+    return ptcl_name_chain_compare(ptcl_name_next(left), ptcl_name_next(right));
 }
 
 static bool ptcl_value_type_is_name(
@@ -2343,7 +2428,7 @@ static ptcl_type ptcl_type_copy(
                 else
                 {
                     ptcl_type argument_type = ptcl_type_copy(&type->function_pointer.arguments[i].type, is_out_of_memory);
-                    ptcl_name argument_name = ptcl_name_create_fast(NULL, false);
+                    ptcl_name argument_name = ptcl_name_create_borrowed(NULL, false);
                     arguments[i] = ptcl_argument_create(&argument_type, &argument_name);
                     if (*is_out_of_memory)
                     {
@@ -3128,10 +3213,10 @@ static char *ptcl_type_to_word_copy(
     switch (type->type)
     {
     case ptcl_value_type_type:
-        name = ptcl_string(type->comp_type->identifier.value, NULL);
+        name = ptcl_string(ptcl_name_value(&type->comp_type->identifier), NULL);
         break;
     case ptcl_value_typedata_type:
-        name = ptcl_string("_struct_", type->typedata->identifier.value, NULL);
+        name = ptcl_string("_struct_", ptcl_name_value(&type->typedata->identifier), NULL);
         break;
     case ptcl_value_array_type:
     {
@@ -3209,16 +3294,16 @@ static char *ptcl_type_to_present_string_copy(
     const ptcl_type *const type)
 {
     PTCL_VALIDATE_COND(type != NULL);
-    char *is_static = type->is_static ? "static " : "";
+    const char *is_static = type->is_static ? "static " : "";
     char *name;
 
     switch (type->type)
     {
     case ptcl_value_type_type:
-        name = ptcl_string(is_static, type->comp_type->identifier.value, NULL);
+        name = ptcl_string(is_static, ptcl_name_value(&type->comp_type->identifier), NULL);
         break;
     case ptcl_value_typedata_type:
-        name = ptcl_string(is_static, "typedata (", type->typedata->identifier.value, ")", NULL);
+        name = ptcl_string(is_static, "typedata (", ptcl_name_value(&type->typedata->identifier), ")", NULL);
         break;
     case ptcl_value_array_type:
     {
@@ -3329,15 +3414,15 @@ static void ptcl_name_destroy(
     ptcl_name *const name)
 {
     PTCL_VALIDATE_COND(name != NULL);
-    if (name->next_needs_free && name->next != NULL)
+    if (ptcl_name_next_needs_free(name) && ptcl_name_next(name) != NULL)
     {
-        ptcl_name_destroy(name->next);
-        free(name->next);
+        ptcl_name_destroy(name->meta.next);
+        free(name->meta.next);
     }
 
-    if (name->needs_free)
+    if (ptcl_name_needs_free(name))
     {
-        free(name->value);
+        free(name->meta.value);
     }
 }
 
